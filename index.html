@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Proof of Human</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://raw.githack.com/ShareRing/shareringlink-javascript-library/master/sharering.query.lib.prod.min.js"></script>
+    <style>
+        body {font-family: system-ui; background:#0f0f0f; color:#fff; text-align:center; padding:40px 20px;}
+        #status {margin:30px 0; font-size:18px;}
+    </style>
+</head>
+<body>
+    <h1>Prove You Are Human</h1>
+    <p>Scan the QR with <b>ShareRing Me</b> app.<br>Biometric liveness check — nothing stored.</p>
+    
+    <div class="sharering-query"
+         queryId="69964833c65d9f316f5ea3dd"
+         mode="basic"
+         qrcodeOwner="shareledger16ac92ru7rhdn2ruxur4a7cyszexha39dr6re39"
+         app="ShareRing Me"
+         oninit="onInit"
+         onscan="onScan">
+    </div>
+
+    <div id="status">Loading QR code...</div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready(); tg.expand();
+
+        const urlParams = new URLSearchParams(location.search);
+        const chatId = urlParams.get('chat_id');
+
+        function onInit() {
+            document.getElementById('status').textContent = '✅ QR ready — scan with ShareRing Me';
+        }
+
+        function onScan(data) {
+            console.log(data);
+            // Any successful scan = human proof (they have ShareRing Me identity)
+            document.getElementById('status').innerHTML = '✅ Human verified!<br>Approving you now...';
+            tg.sendData(JSON.stringify({action: 'human_verified', chat_id: chatId}));
+            setTimeout(() => tg.close(), 1000);
+        }
+    </script>
+</body>
+</html>
