@@ -45,17 +45,24 @@
     <div id="status">Syncing local SDK...</div>
 
     <script>
-        // 1. Define the callback GLOBALLY so the SDK can find it
-        window.onInit = function(data) {
-            console.log("SDK Initialized!", data);
-            document.getElementById('status').innerText = "✅ QR Code Ready";
-        };
+       // 1. When the SDK starts successfully, hide any errors and show success
+window.onInit = function(data) {
+    console.log("SDK Initialized!", data);
+    document.getElementById('status').innerHTML = "✅ QR Code Ready";
+};
 
-        // 2. Set the Global Environment
-        window.ShareRingLink = {
-            baseUrl: "https://api.sharering.link/v1",
-            mode: "static"
-        };
+// 2. The Kickstart logic
+$(document).ready(function() {
+    setTimeout(() => {
+        if (window.ShareRingQuery) {
+            window.ShareRingQuery.init();
+            // We don't need to do anything else here because onInit will handle the status
+        } else {
+            // ONLY show this if the library is actually missing
+            document.getElementById('status').innerHTML = "<span style='color:red'>❌ Error: SDK Library not loaded.</span>";
+        }
+    }, 1000);
+});
 
         // 3. Kickstart the SDK after the page loads
         $(document).ready(function() {
