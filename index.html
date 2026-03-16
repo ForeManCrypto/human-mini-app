@@ -293,7 +293,7 @@
     window.onInit = function(data) {
         console.log('onInit', data);
         // Store the real session_id generated for this QR
-        trustedSessionId = data && data.session_id;
+trustedSessionId = data && (data.session_id || data.sessionId);
         document.getElementById('srLoading').style.display = 'none';
         document.querySelector('.sharering-query').style.display = 'inline-block';
         document.getElementById('qrHint').style.display = 'block';
