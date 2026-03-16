@@ -1,5 +1,4 @@
-import logging, json, sqlite3
-import os
+import logging, json, sqlite3, os
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
     WebAppInfo, LabeledPrice
@@ -13,9 +12,11 @@ from telegram.ext import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ── Config ────────────────────────────────────────────────────────
+# Suppress httpx logs to hide token from Railway logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+# ── Config ────────────────────────────────────────────────────────
+BOT_TOKEN    = os.environ.get("BOT_TOKEN")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://foremancrypto.github.io/human-mini-app")
 
 ENABLE_SETUP_FEE = False
@@ -94,7 +95,6 @@ def activate_group(chat_id):
     conn.close()
 
 def has_seen_welcome(user_id, chat_id):
-    """Returns True if this user has already received the welcome flow for this chat."""
     conn = sqlite3.connect("groups.db")
     row  = conn.execute(
         "SELECT 1 FROM seen_users WHERE user_id=? AND chat_id=?",
@@ -115,8 +115,8 @@ def mark_seen(user_id, chat_id):
 def welcome_keyboard(chat_id):
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("ℹ️ About Us",        callback_data=f"about|{chat_id}"),
-            InlineKeyboardButton("📱 Download App",    callback_data=f"download|{chat_id}"),
+            InlineKeyboardButton("ℹ️ About Us",     callback_data=f"about|{chat_id}"),
+            InlineKeyboardButton("📱 Download App", callback_data=f"download|{chat_id}"),
         ],
         [
             InlineKeyboardButton(
@@ -129,8 +129,8 @@ def welcome_keyboard(chat_id):
 def download_keyboard():
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🍎 App Store (iOS)",      url=IOS_URL),
-            InlineKeyboardButton("🤖 Play Store (Android)", url=ANDROID_URL),
+            InlineKeyboardButton("🍎 App Store (iOS)",       url=IOS_URL),
+            InlineKeyboardButton("🤖 Play Store (Android)",  url=ANDROID_URL),
         ],
         [InlineKeyboardButton("← Back", callback_data="back_to_welcome")]
     ])
@@ -140,18 +140,16 @@ def instructions_keyboard(chat_id):
         [
             InlineKeyboardButton(
                 "🔍 Verify Now",
-                web_app=WebAppInfo(
-                    url=f"{MINI_APP_URL}/?chat_id={chat_id}"
-                )
+                web_app=WebAppInfo(url=f"{MINI_APP_URL}/?chat_id={chat_id}")
             )
         ],
-        [InlineKeyboardButton("← Back", callback_data="back_to_welcome")]
+        [InlineKeyboardButton("← Back", callback_data=f"back|{chat_id}")]
     ])
 
-def about_keyboard():
+def about_keyboard(chat_id):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 sharering.network", url=ABOUT_URL)],
-        [InlineKeyboardButton("← Back",              callback_data="back_to_welcome")]
+        [InlineKeyboardButton("← Back", callback_data=f"back|{chat_id}")]
     ])
 
 # ── Handlers ──────────────────────────────────────────────────────
@@ -211,7 +209,6 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # First interaction only — send full welcome flow
     if not has_seen_welcome(user_id, chat_id):
         mark_seen(user_id, chat_id)
         await context.bot.send_message(
@@ -239,10 +236,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data  = query.data
 
     if data.startswith("about|"):
+        chat_id = data.split("|")[1]
         await query.edit_message_text(
             ABOUT_TEXT,
             parse_mode="Markdown",
-            reply_markup=about_keyboard()
+            reply_markup=about_keyboard(chat_id)
         )
 
     elif data.startswith("download|"):
@@ -262,15 +260,13 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=instructions_keyboard(chat_id)
         )
 
-    elif data == "back_to_welcome":
-        # Extract chat_id from the current keyboard if possible
-        # Fall back to a generic back message
+    elif data.startswith("back|"):
+        # Back button always carries chat_id — restore welcome screen
+        chat_id = data.split("|")[1]
         await query.edit_message_text(
             WELCOME_TEXT,
             parse_mode="Markdown",
-            reply_markup=welcome_keyboard(
-                context.user_data.get("chat_id", 0)
-            )
+            reply_markup=welcome_keyboard(chat_id)
         )
 
 async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -293,10 +289,7 @@ async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.effective_message.reply_text(
                     msg, parse_mode="Markdown"
                 )
-                logger.info(
-                    f"Approved user {user_id} for chat {chat_id} "
-                    f"(profile: {profile})"
-                )
+                logger.info(f"Approved user {user_id} for chat {chat_id} (profile: {profile})")
             else:
                 await update.effective_message.reply_text(
                     "⚠️ This group hasn't been activated yet. Ask an admin to run /setup."
