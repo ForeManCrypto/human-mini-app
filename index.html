@@ -2,64 +2,92 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>QR Render Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    <title>Proof of Human | ShareRing</title>
+    
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.qrcode/1.0/jquery.qrcode.min.js"></script>
-    <script src="https://raw.githack.com/ShareRing/shareringlink-javascript-library/master/sharering.query.lib.prod.min.js"></script>
+    
+    <script src="https://sharering.github.io/shareringlink-javascript-library/sharering.query.lib.prod.min.js" crossorigin="anonymous"></script>
 
     <style>
-        body { background: #111; color: white; text-align: center; padding-top: 50px; font-family: sans-serif; }
-        /* This container MUST be visible and have a size for the QR to draw */
-        .qrcode-container {
+        body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: white; text-align: center; padding: 50px 20px; margin: 0; }
+        .qr-card {
             background: white;
-            padding: 20px;
-            width: 200px;
-            height: 200px;
-            margin: 20px auto;
-            border-radius: 10px;
+            padding: 25px;
+            width: 220px;
+            height: 220px;
+            margin: 0 auto 20px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        canvas { width: 100% !important; height: auto !important; }
+        #qrcode canvas { width: 100% !important; height: auto !important; }
+        #status { font-size: 16px; color: #00d1ff; margin-top: 20px; font-weight: 500; }
+        .error-text { color: #ff4d4d; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h2>Scan to Verify</h2>
-    
+    <h2>Verify Humanity</h2>
+    <p style="color: #888;">Scan with the <b>ShareRing Me</b> app</p>
+
     <div class="sharering-query" 
          queryId="69b75ef6169a014f92b5ca1e" 
          qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
-         mode="static">
-        <div class="qrcode-container">
+         mode="static"
+         oninit="onInit"
+         onscan="onScan">
+        <div class="qr-card">
             <div id="qrcode"></div>
         </div>
     </div>
 
-    <p id="msg">Loading QR...</p>
+    <div id="status">Connecting to ShareLedger...</div>
 
     <script>
-        // Force the SDK to ignore automatic settings and use Mainnet
+        // 1. Force Global Config to point to Mainnet API
         window.ShareRingLink = {
             baseUrl: "https://api.sharering.link/v1",
             mode: "static"
         };
 
+        // 2. Fallback for the SDK callback functions
+        function onInit(data) {
+            console.log("SDK Callback: Init Success", data);
+            document.getElementById('status').innerText = "✅ QR Code Ready";
+        }
+
+        function onScan(data) {
+            console.log("SDK Callback: Scan Success", data);
+            document.getElementById('status').innerHTML = "<span style='color:#00ff88'>✅ Verified Successfully!</span>";
+        }
+
+        // 3. The "Manual Bridge" logic
         $(document).ready(function() {
-            // Give the browser a moment to breathe, then force the render
+            console.log("Page ready. Initializing SDK...");
+            
+            // Give the library 2 seconds to load and clear any local analysis
             setTimeout(() => {
                 if (window.ShareRingQuery) {
                     try {
-                        window.ShareRingQuery.init();
-                        document.getElementById('msg').innerText = "QR Rendered (Check below)";
-                    } catch (e) {
-                        document.getElementById('msg').innerText = "Error: " + e.message;
+                        // Force manual initialization with the working parameters
+                        window.ShareRingQuery.init({
+                            queryId: "69b75ef6169a014f92b5ca1e",
+                            qrcodeOwner: "shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq",
+                            mode: "static"
+                        });
+                    } catch (err) {
+                        console.error("Init Error:", err);
+                        document.getElementById('status').innerHTML = '<span class="error-text">Handshake Failed. Check Dashboard Settings.</span>';
                     }
                 } else {
-                    document.getElementById('msg').innerText = "SDK Library not loaded.";
+                    document.getElementById('status').innerHTML = '<span class="error-text">SDK Library not detected.</span>';
                 }
-            }, 1000);
+            }, 2000);
         });
     </script>
 </body>
