@@ -56,10 +56,7 @@
             gap: 24px;
         }
 
-        .header {
-            text-align: center;
-            animation: fadeDown 0.6s ease both;
-        }
+        .header { text-align: center; animation: fadeDown 0.6s ease both; }
 
         .badge {
             display: inline-flex;
@@ -113,7 +110,6 @@
             opacity: 0.6;
         }
 
-        /* Loading spinner — shown before QR renders */
         .sr-loading {
             display: flex;
             flex-direction: column;
@@ -134,8 +130,6 @@
 
         .qr-section { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
         .qr-section.hidden { display: none; }
-
-        /* The sharering-query div — hidden until onInit fires */
         .sharering-query { display: none; }
 
         .qr-card {
@@ -184,18 +178,19 @@
             text-align: center;
         }
 
-        /* Verified state */
-        .verified-overlay { display: none; flex-direction: column; align-items: center; gap: 12px; padding: 10px 0; width: 100%; }
+        .verified-overlay {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            width: 100%;
+        }
         .verified-overlay.show { display: flex; }
         .checkmark { font-size: 56px; animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both; }
         .verified-text { font-size: 22px; font-weight: 800; color: var(--accent2); }
-        .verified-name {
-            font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--muted);
-            background: rgba(0,255,136,0.06); border: 1px solid rgba(0,255,136,0.15);
-            border-radius: 8px; padding: 8px 16px;
-        }
+        .verified-sub { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--muted); text-align: center; }
 
-        /* Status */
         #status {
             width: 100%;
             background: var(--surface);
@@ -237,17 +232,11 @@
 
     <div class="qr-wrapper">
         <div class="qr-section" id="qrSection">
-
-            <!-- Spinner shown while QR loads -->
             <div class="sr-loading" id="srLoading">
                 <div class="sr-spinner"></div>
                 <span>Generating QR code...</span>
             </div>
 
-            <!--
-                queryId format: "QUERY_ID,CLIENT_ID"
-                CLIENT_ID = "basic" (confirmed from sharering.link/qrcode/ID,basic URL)
-            -->
             <div class="sharering-query"
                  queryId="69b75ef6169a014f92b5ca1e,basic"
                  qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq"
@@ -267,7 +256,7 @@
         <div class="verified-overlay" id="verifiedOverlay">
             <div class="checkmark">✅</div>
             <div class="verified-text">Human Verified</div>
-            <div class="verified-name" id="verifiedName" style="display:none"></div>
+            <div class="verified-sub" id="verifiedSub">Approving your join request...</div>
         </div>
     </div>
 
@@ -278,77 +267,102 @@
 
 </div>
 
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/jquery.qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/sharering.query.lib.prod.min.js"></script>
 
 <script>
+    // ── Config ────────────────────────────────────────────────────
+    var WORKER_URL = 'https://human-bot-worker.moneyforeman.workers.dev';
+
+    // ── Read chat_id passed by the Telegram bot in the URL ────────
+    var urlParams  = new URLSearchParams(window.location.search);
+    var chatId     = urlParams.get('chat_id') || '';
+    var trustedSessionId = null;
+
+    console.log('chat_id:', chatId);
+
     function setStatus(msg, type) {
         document.getElementById('status').className = type || '';
         document.getElementById('statusText').textContent = msg;
     }
 
-    // Fires when QR is rendered and ready to scan
-   var trustedSessionId = null; // set in onInit
+    // ── ShareRing callbacks ───────────────────────────────────────
 
-window.onInit = function(data) {
-    trustedSessionId = data && data.session_id; // store the real session_id
-    console.log('onInit — trusted session:', trustedSessionId);
-    document.getElementById('srLoading').style.display = 'none';
-    document.querySelector('.sharering-query').style.display = 'inline-block';
-    document.getElementById('qrHint').style.display = 'block';
-    setStatus('QR Ready — scan with ShareRing Me app');
-};
+    window.onInit = function(data) {
+        console.log('onInit', data);
+        // Store the real session_id generated for this QR
+        trustedSessionId = data && data.session_id;
+        document.getElementById('srLoading').style.display = 'none';
+        document.querySelector('.sharering-query').style.display = 'inline-block';
+        document.getElementById('qrHint').style.display = 'block';
+        setStatus('QR Ready — scan with ShareRing Me app');
+    };
 
-window.onScan = function(data) {
-    console.log('onScan fired', data);
-    // Don't trust this yet — verify against webhook.site first
-    verifyWithWebhook(data);
-};
+    window.onScan = function(data) {
+        console.log('onScan fired', data);
+        // Don't trust the client — verify against our Worker first
+        setStatus('Verifying with server...');
+        verifyWithWorker();
+    };
 
-async function verifyWithWebhook(scanData) {
-    setStatus('Verifying...');
-    var WEBHOOK_TOKEN = "abab9e9b-70af-49f8-9d9d-9cc92a6bc3ef";
+    // ── Poll Worker to confirm ShareRing actually POSTed ──────────
+    // Retries for up to 15 seconds (ShareRing may take a moment to POST)
+    var pollCount  = 0;
+    var maxPolls   = 10;
+    var pollHandle = null;
 
-    try {
-        var res = await fetch(
-            'https://webhook.site/token/' + WEBHOOK_TOKEN + '/requests?page=1&per_page=5&sorting=newest',
-            { headers: { 'Accept': 'application/json' } }
-        );
-        var json = await res.json();
+    function verifyWithWorker() {
+        if (!trustedSessionId) {
+            setStatus('Session error — please refresh', 'error');
+            return;
+        }
+        pollCount = 0;
+        pollHandle = setInterval(doPoll, 1500);
+    }
 
-        if (!json.data || json.data.length === 0) {
-            setStatus('Verification failed — no server confirmation', 'error');
+    async function doPoll() {
+        pollCount++;
+        if (pollCount > maxPolls) {
+            clearInterval(pollHandle);
+            setStatus('Verification timed out — please try again', 'error');
             return;
         }
 
-        // Look for a webhook POST that contains our trusted session_id
-        var confirmed = json.data.find(function(req) {
-            try {
-                var body = JSON.parse(req.content);
-                return body.sessionId === trustedSessionId
-                    || body.session_id === trustedSessionId
-                    || req.content.indexOf(trustedSessionId) !== -1;
-            } catch(e) {
-                return req.content.indexOf(trustedSessionId) !== -1;
+        try {
+            var res  = await fetch(WORKER_URL + '/check?session=' + trustedSessionId);
+            var json = await res.json();
+
+            if (json.verified) {
+                clearInterval(pollHandle);
+                handleVerified(json.data || {});
+            } else {
+                setStatus('Verifying... (' + pollCount + '/' + maxPolls + ')');
             }
-        });
-
-        if (confirmed) {
-            var body = {};
-            try { body = JSON.parse(confirmed.content); } catch(e) {}
-            handleVerified(body);
-        } else {
-            setStatus('Verification failed — session not confirmed by server', 'error');
+        } catch(err) {
+            console.warn('Poll error:', err.message);
         }
-
-    } catch(err) {
-        // Webhook.site CORS blocks direct polling — fall back to trusting onScan
-        // TODO: replace with your own backend endpoint for production
-        console.warn('Webhook poll failed (CORS), falling back:', err.message);
-        handleVerified(scanData);
     }
-}
+
+    // ── Handle confirmed verification ─────────────────────────────
+    function handleVerified(data) {
+        document.getElementById('qrSection').classList.add('hidden');
+        document.getElementById('verifiedOverlay').classList.add('show');
+        setStatus('✅ Verified! Approving join request...', 'success');
+
+        // Send to Telegram bot — bot approves the join request
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.sendData(JSON.stringify({
+                action: 'human_verified',
+                chat_id: chatId
+            }));
+        } else {
+            // Browser test mode
+            console.log('Test mode — Telegram not detected');
+            document.getElementById('verifiedSub').textContent = 'Verified! (test mode)';
+        }
+    }
 </script>
 </body>
 </html>
