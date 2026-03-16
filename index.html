@@ -35,17 +35,18 @@
         #qrcode canvas, #qrcode img {
             width: 100% !important;
             height: auto !important;
+            display: block;
         }
 
         #status { margin-top: 30px; font-size: 16px; color: #00ff88; min-height: 50px; }
-        .error { color: #ff5555; }
+        .error { color: #ff5555; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>Are you human?</h1>
-    <p>Please use the <b>ShareRing Me</b> app to scan this QR code.</p>
+    <p>Scan with <b>ShareRing Me</b> app.<br>Verify your humanity to join.</p>
     
     <div class="sharering-query" 
          queryId="69b75ef6169a014f92b5ca1e" 
@@ -58,13 +59,13 @@
         </div>
     </div>
 
-    <div id="status">Establishing secure connection...</div>
+    <div id="status">Syncing with ShareLedger...</div>
 </div>
 
 <script>
     const tg = window.Telegram.WebApp;
 
-    // 1. Set Global Config to bypass auto-analysis errors
+    // Global Configuration for Mainnet
     window.ShareRingLink = {
         baseUrl: "https://api.sharering.link/v1",
         mode: "static"
@@ -74,40 +75,45 @@
         tg.ready();
         tg.expand();
         
-        // 2. Manual Kickstart
-        // We wait 1 second to ensure all scripts are "painted" in the browser
+        // Manual Kickstart to avoid "Auto-Analyze" timing issues
         setTimeout(() => {
             if (window.ShareRingQuery) {
-                console.log("Attempting manual SDK initialization...");
+                console.log("Initializing ShareRing SDK...");
                 try {
                     window.ShareRingQuery.init();
                 } catch (err) {
-                    console.error("Init error:", err);
-                    document.getElementById('status').innerHTML = '<span class="error">Analysis Error. Check Dashboard Attributes.</span>';
+                    console.error("SDK Analysis Failed:", err);
+                    document.getElementById('status').innerHTML = '<span class="error">Analysis Error. Check Dashboard Endpoint/Attributes.</span>';
                 }
-            } else {
-                console.error("ShareRing SDK not found!");
             }
-        }, 1000);
+        }, 1500);
     });
 
     function onInit(data) {
-        console.log('SDK Ready:', data);
-        document.getElementById('status').textContent = '✅ QR Generated';
+        console.log('SDK initialized:', data);
+        document.getElementById('status').textContent = '✅ QR Code Ready';
     }
 
     function onScan(data) {
         console.log('Scan Success:', data);
-        document.getElementById('status').innerHTML = '✅ Verified!<br>Returning to Telegram...';
+        document.getElementById('status').innerHTML = '✅ Human Verified!<br>Returning to Telegram...';
         
-        // Pass the verify action back to your bot
+        // Send data back to Telegram Bot
         tg.sendData(JSON.stringify({
             action: 'human_verified',
-            queryId: "69b75ef6169a014f92b5ca1e"
+            queryId: "69b75ef6169a014f92b5ca1e",
+            verified: true
         }));
 
-        setTimeout(() => tg.close(), 2000);
+        setTimeout(() => tg.close(), 2500);
     }
+
+    // Capture specific ShareRing errors
+    window.addEventListener('error', function(e) {
+        if (e.message.includes('analyze')) {
+            document.getElementById('status').innerHTML = '<span class="error">Analyze Error: Verify Dashboard Configuration.</span>';
+        }
+    });
 </script>
 
 </body>
