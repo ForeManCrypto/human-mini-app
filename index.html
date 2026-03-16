@@ -1,3 +1,346 @@
+
+I was trying to test the query but my qr code is not working .can you help me deep dive ? This is the documentation https://docs.sharering.network/digital-identity/sharering-link/verification-levels-and-keywords 
+And this is my coide 
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proof of Human</title>
+    
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/jquery.qrcode.min.js"></script>
+
+<script src="sharering.query.lib.prod.min.js"></script>
+
+    <style>
+        body { font-family: sans-serif; background: #0f0f0f; color: white; text-align: center; padding: 50px 20px; margin: 0; }
+        .qr-card {
+            background: white;
+            padding: 20px;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 20px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #qrcode canvas { width: 100% !important; height: auto !important; }
+        #status { margin-top: 20px; color: #00d1ff; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h2>Verify Humanity</h2>
+    
+    <div class="sharering-query" 
+     queryId="69b75ef6169a014f92b5ca1e" 
+     qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
+     mode="static"
+     oninit="onInit">
+    <div class="qr-card">
+        <div id="qrcode"></div>
+    </div>
+</div>
+
+    <div id="status">Syncing local SDK...</div>
+
+    <script>
+ // 1. Define the success callback
+window.onInit = function(data) {
+    console.log("SDK Initialized!", data);
+    // Hide the 'Syncing' text and show a real instruction
+    document.getElementById('status').innerHTML = "✅ QR Code Ready<br><small>Scan with ShareRing Me app</small>";
+};
+
+// 2. Define the callback for when they actually scan
+window.onScan = function(data) {
+    console.log("SUCCESS! User verified:", data);
+    document.getElementById('status').innerHTML = "<h3 style='color:#00ff88'>✅ Verification Complete!</h3>";
+    
+    // This is where you'll tell Telegram the user is good to go
+    if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.sendData(JSON.stringify({
+            status: "human_verified",
+            session: data.session_id
+        }));
+    }
+};
+
+window.ShareRingLink = {
+    baseUrl: "https://api.sharering.link/v1",
+    mode: "static"
+};
+
+$(document).ready(function() {
+    // Only show an error if the script actually fails to load after 3 seconds
+    setTimeout(() => {
+        if (window.ShareRingQuery) {
+            window.ShareRingQuery.init();
+        } else {
+            document.getElementById('status').innerHTML = "<span style='color:red'>❌ Error: SDK Library failed to load.</span>";
+        }
+    }, 1000);
+});
+    </script>
+</body>
+</html>
+Show more
+10:30 AM
+
+Searched the web
+Searched the web
+Good — I've read the docs carefully. I can see several issues in your code. Here's the full breakdown:
+
+🔍 Issues Found
+1. ❌ Wrong script source for the ShareRing library
+Your code loads the library from a local file:
+
+html
+<script src="sharering.query.lib.prod.min.js"></script>
+This will silently fail unless that file is physically served from the same directory. The docs use a CDN URL:
+
+html
+<script src="https://raw.githack.com/ShareRing/shareringlink-javascript-library/master/sharering.query.lib.prod.min.js" crossorigin="anonymous"></script>
+2. ❌ onscan attribute is missing from the <div>
+Your div only has oninit="onInit" but is missing onscan="onScan". The docs show both are required:
+
+html
+<!-- Your code -->
+oninit="onInit"
+
+<!-- Should be -->
+oninit="onInit" onscan="onScan"
+3. ❌ mode="static" vs mode="dynamic"
+The docs use mode="dynamic" in their integration example. mode="static" may generate a fixed non-refreshing QR code that doesn't properly poll for scan results. Unless you have a specific reason to use static, switch to dynamic.
+
+4. ❌ window.ShareRingLink config block is non-standard
+You added this custom config:
+
+js
+window.ShareRingLink = {
+    baseUrl: "https://api.sharering.link/v1",
+    mode: "static"
+};
+This is not mentioned in the docs at all and may interfere with the library's initialization. Remove it.
+
+5. ⚠️ Manual window.ShareRingQuery.init() call is unnecessary
+The library auto-initializes when it finds .sharering-query divs. Your manual setTimeout + .init() call is redundant and could cause a double-init or conflict.
+
+✅ Fixed Code
+html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proof of Human</title>
+    
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/jquery.qrcode.min.js"></script>
+    <!-- FIX 1: Use CDN instead of local file -->
+    <script src="https://raw.githack.com/ShareRing/shareringlink-javascript-library/master/sharering.query.lib.prod.min.js" crossorigin="anonymous"></script>
+
+    <style>
+        body { font-family: sans-serif; background: #0f0f0f; color: white; text-align: center; padding: 50px 20px; margin: 0; }
+        .qr-card {
+            background: white;
+            padding: 20px;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 20px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #qrcode canvas { width: 100% !important; height: auto !important; }
+        #status { margin-top: 20px; color: #00d1ff; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h2>Verify Humanity</h2>
+    
+    <!-- FIX 2: Added onscan, FIX 3: mode="dynamic" -->
+    <div class="sharering-query" 
+         queryId="69b75ef6169a014f92b5ca1e" 
+         qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
+         mode="dynamic"
+         oninit="onInit"
+         onscan="onScan">
+        <div class="qr-card">
+            <div id="qrcode"></div>
+        </div>
+    </div>
+
+    <div id="status">Syncing local SDK...</div>
+
+    <script>
+        // FIX 4: Removed the non-standard window.ShareRingLink config block
+
+        window.onInit = function(data) {
+            console.log("SDK Initialized!", data);
+            document.getElementById('status').innerHTML = "✅ QR Code Ready<br><small>Scan with ShareRing Me app</small>";
+        };
+
+        window.onScan = function(data) {
+            console.log("SUCCESS! User verified:", data);
+            document.getElementById('status').innerHTML = "<h3 style='color:#00ff88'>✅ Verification Complete!</h3>";
+            
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.sendData(JSON.stringify({
+                    status: "human_verified",
+                    session: data.session_id
+                }));
+            }
+        };
+
+        // FIX 5: Removed unnecessary manual init — library auto-initializes
+    </script>
+</body>
+</html>
+Summary of all fixes
+#	Issue	Fix
+1	Local .js file path fails	Use the CDN URL from docs
+2	Missing onscan attribute	Add onscan="onScan" to the div
+3	mode="static" breaks polling	Change to mode="dynamic"
+4	Non-standard window.ShareRingLink config	Remove it entirely
+5	Manual ShareRingQuery.init() call	Remove — library self-initializes
+The most likely root cause of your QR not rendering at all is fix #1 — if sharering.query.lib.prod.min.js isn't being served locally, the whole library never loads and nothing works.
+
+Verify Humanity
+❌ Error: SDK Library failed to load.
+
+10:32 AM
+That error message is actually coming from your own setTimeout fallback — it means window.ShareRingQuery is still undefined after 1 second, confirming the library truly isn't loading. Let's debug this step by step.
+
+The most likely culprits:
+
+1. raw.githack.com may be blocked or unreliable
+
+Try the direct jsDelivr CDN instead — it's more stable:
+
+html
+<script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/sharering.query.lib.prod.min.js"></script>
+2. Script load order matters
+
+The ShareRing library depends on jQuery, so jQuery must fully load first. Move all three scripts to the bottom of <body>, just before your <script> block — not in <head>. This guarantees jQuery exists before the ShareRing lib tries to use it.
+
+3. Open your browser DevTools → Console & Network tabs
+
+This is the fastest way to confirm what's actually happening:
+
+Console tab: Look for any red errors (404, CORS, script errors)
+Network tab: Filter by "JS" — check if sharering.query.lib.prod.min.js shows a ✅ 200 or ❌ 404/failed status
+Here's the corrected structure with all three fixes applied:
+
+html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proof of Human</title>
+    <style>
+        body { font-family: sans-serif; background: #0f0f0f; color: white; text-align: center; padding: 50px 20px; margin: 0; }
+        .qr-card {
+            background: white;
+            padding: 20px;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 20px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #qrcode canvas { width: 100% !important; height: auto !important; }
+        #status { margin-top: 20px; color: #00d1ff; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h2>Verify Humanity</h2>
+    
+    <div class="sharering-query" 
+         queryId="69b75ef6169a014f92b5ca1e" 
+         qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
+         mode="dynamic"
+         oninit="onInit"
+         onscan="onScan">
+        <div class="qr-card">
+            <div id="qrcode"></div>
+        </div>
+    </div>
+
+    <div id="status">Loading SDK...</div>
+
+    <!-- Scripts at bottom of body, in correct order -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/jquery.qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/sharering.query.lib.prod.min.js"></script>
+
+    <script>
+        window.onInit = function(data) {
+            console.log("SDK Initialized!", data);
+            document.getElementById('status').innerHTML = "✅ QR Code Ready<br><small>Scan with ShareRing Me app</small>";
+        };
+
+        window.onScan = function(data) {
+            console.log("SUCCESS! User verified:", data);
+            document.getElementById('status').innerHTML = "<h3 style='color:#00ff88'>✅ Verification Complete!</h3>";
+            
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.sendData(JSON.stringify({
+                    status: "human_verified",
+                    session: data.session_id
+                }));
+            }
+        };
+    </script>
+</body>
+</html>
+What to check in DevTools Network tab:
+
+What you see	Meaning
+sharering.query.lib.prod.min.js → 200	File loaded OK, problem is elsewhere
+sharering.query.lib.prod.min.js → 404	Wrong URL
+sharering.query.lib.prod.min.js → CORS error	Host is blocking cross-origin loads
+File doesn't appear at all	Script tag never executed (jQuery missing)
+Can you share what the Network tab shows? That'll tell us exactly which layer is failing.
+
+Ok the QR code generates, but when I scan it with sharering app nothing happens. how can we investigate ? if that helps, this is an example of a use case https://github.com/ShareRing/zealy-sharering-link-integration?tab=readme-ov-file
+
+10:38 AM
+
+Searched the web
+Searched the web
+Good — the QR rendering is solved. Now let's systematically figure out why scanning does nothing. Based on the docs and how this library works, there are 4 likely culprits:
+
+🔍 Root Cause Analysis
+1. ❌ Most likely: Your page is not served over HTTPS (or localhost)
+The ShareRing app scans the QR code and then calls back to your server to exchange the session result. If your page is running as a local file:// path or plain http://, the callback will be blocked or the library won't be able to poll. You must serve it from HTTPS or localhost.
+
+2. ❌ Missing app attribute on the div
+The docs example includes app="ShareRing Me" — this tells the library which deep-link scheme to encode into the QR. Without it, the app may not know how to handle the scan:
+
+html
+<!-- Your div is missing this -->
+app="ShareRing Me"
+3. ❌ onInit data object — check what it actually returns
+The onInit callback receives session data. You need to log it carefully — it should contain a session_id or similar token that the library uses to poll for the scan result. If this is empty or malformed, nothing downstream will work.
+
+4. ⚠️ The library polls via the ShareRing API — your queryId must be active
+The query 69b75ef6169a014f92b5ca1e must exist, be active, and belong to the qrcodeOwner address in the ShareRing Link dashboard. If the query was deleted, paused, or the owner address doesn't match, the scan will silently fail.
+
+✅ Debugged Version
+Add this to your page — it instruments every step so you can see exactly where the chain breaks:
+
+html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -115,3 +458,899 @@
     </script>
 </body>
 </html>
+What to look for after scanning
+After you scan and nothing happens, check the debug panel on screen AND the browser console Network tab filtered by XHR/Fetch:
+
+What you see	Diagnosis
+onInit never fires	Library broken, check console for JS errors
+onInit fires but session_id is missing	Query config issue in ShareRing dashboard
+onInit fires with valid session_id, onScan never fires	API polling is failing — likely HTTP vs HTTPS, or query is paused
+Network tab shows 401/403 on ShareRing API calls	queryId or qrcodeOwner mismatch
+Network tab shows 404	Query ID doesn't exist in the dashboard
+Can you paste what the debug panel shows after scanning? Specifically what onInit logs as its data object — that'll tell us if the session handshake is working at all.
+
+this time I get error to anaylze query. please try again in the sharering me app.
+
+10:42 AM
+That's a very specific error — it's coming from inside the ShareRing Me app itself, which means the QR code is being read successfully, but the app can't parse or execute the query. This points directly to the query configuration in your ShareRing Link dashboard, not your HTML/JS code.
+
+🔍 What "error to analyze query" means
+The app fetched your query from ShareRing's backend and tried to run it, but something in the query definition itself is broken. Most common causes:
+
+1. ❌ Most likely: The query's JavaScript is invalid or uses wrong keywords
+Log into your ShareRing Link dashboard, find query 69b75ef6169a014f92b5ca1e, and check the Advanced mode query code. Common mistakes:
+
+javascript
+// ❌ Wrong — "proof_of_human" is not a real keyword
+var result = VALUE("proof_of_human");
+return result;
+
+// ❌ Wrong — keyword typo or unsupported level
+var result = VALUE("age.verify");  // should be "age.verified"
+return result;
+
+// ✅ Correct — valid keyword from the docs
+var isHuman = VALUE("age.verified") > 0 ? "Yes" : "No";
+return "Human check: " + isHuman;
+```
+
+The full list of valid keywords is in the docs you shared. **Paste your query's JS code here** and I can verify it.
+
+---
+
+### 2. ❌ The query is in draft / inactive state
+
+In the dashboard, check if the query has a **Published / Active** toggle. If it's in draft mode, the app will fail to execute it.
+
+---
+
+### 3. ❌ `qrcodeOwner` address mismatch
+
+The `qrcodeOwner` in your HTML:
+```
+shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq
+This must exactly match the owner address shown in the dashboard for that query. If you copied it from a different query or an old account, the app will reject it.
+
+4. ❌ Free account trying to use Verified/Checked level keywords
+If your account is on the free tier, you can only query User Added level attributes (no .verified or .checked keywords). Attempting to use them will cause the app to error.
+
+Account tier	Allowed keywords
+Free	age, name, date_of_birth (User Added only)
+Paid	age.verified, age.checked, etc.
+✅ Quickest way to isolate the problem
+Go to your dashboard and temporarily replace your query code with the simplest possible valid query:
+
+javascript
+// Minimal test query — works on free accounts too
+var name = VALUE("name");
+return "Hello " + name;
+Save it, regenerate/rescan the QR. If this works, the problem is in your original query's JS. If it still errors, the issue is the account/owner mismatch or inactive status.
+
+Can you share:
+
+What your query's JS code looks like in the dashboard?
+Whether your account is free or paid?
+Whether the query shows as Active/Published?
+That'll let us pinpoint it exactly.
+
+Query List
+Edit query 1 Generic information 2 Attributes 3 Review Query Name Query Title Message to users after sharing 25/128 Company Name Endpoints Scheme Scheme Prefix Scheme Suffix App color
+Are you human?
+Thank you for confirming.
+You have shared information related to
+Some businesses and services may not accept this digital proof of identity.
+Name
+User Added
+
+10:43 AM
+This tells me a lot. I can see the exact problem — you're using a Basic mode query with a "User Added" (unverified) attribute, which is fine, but there are a few things to check and fix.
+
+🔍 What I can see from your query config
+Field	Value	Status
+Query Title	"Are you human?"	✅ OK
+Attribute	Name	✅ OK
+Verification level	User Added	✅ OK for free account
+Endpoint	Unknown	⚠️ Critical
+Scheme	Unknown	⚠️ Critical
+Company Name	Unknown	⚠️ Check this
+The two most likely causes of your error
+1. ❌ Endpoint is missing or invalid
+The Endpoint field is where ShareRing sends the result after a scan. If it's:
+
+Empty → the query may fail to complete
+Set to a URL that doesn't exist or returns an error → app throws the error you saw
+For testing purposes, use a free webhook catcher so you can actually see what gets sent:
+
+Go to https://webhook.site
+Copy your unique URL (looks like https://webhook.site/abc-123-...)
+Paste that as your Endpoint in the dashboard
+Save and re-test
+This will also let you see exactly what data ShareRing sends back after a scan, which you'll need for your Telegram integration anyway.
+
+2. ❌ Scheme not set correctly
+The Scheme field controls the deep link that opens the ShareRing Me app after scanning. It should be set to ShareRing Me with the auto-populated prefix/suffix. If it's blank or wrong, the app can't complete the handshake.
+
+Make sure it looks like this in the dashboard:
+
+Scheme: ShareRing Me
+Prefix/Suffix: auto-filled (don't touch these)
+✅ Action checklist
+Go back into Edit Query and verify:
+
+Endpoint → set to a https://webhook.site/your-id URL for testing
+Scheme → select "ShareRing Me" from the dropdown
+Company Name → fill this in (can't be blank)
+Hit Save, then go back to your HTML page, hard refresh (Ctrl+Shift+R), and rescan
+Then check webhook.site — do you see an incoming request after scanning? That'll confirm the full pipeline works. Share what shows up there and we'll wire it into your Telegram bot.
+
+How do I link webhook to my page ? my page is at https://foremancrypto.github.io/human-mini-app/
+
+10:47 AM
+Great — your page is live on GitHub Pages over HTTPS, so that's perfect. Here's exactly how to wire webhook.site to your page:
+
+The flow you're building
+User scans QR → ShareRing app → POST to webhook.site → your page polls for result
+The issue is webhook.site is just for inspecting — it can't push data back to your page. For a real integration you have two options depending on your setup:
+
+Good choice — let's get webhook.site working first so you can confirm the full scan pipeline works, then we'll move to a real solution.
+
+Step 1 — Set up webhook.site
+Go to https://webhook.site
+You'll get a unique URL instantly, like:
+   https://webhook.site/✦✦✦✦-your-unique-id
+Copy that URL — keep this tab open
+Step 2 — Paste it as your Endpoint in ShareRing dashboard
+Log into https://sharering.link/user/login
+Go to Endpoints tab → Add Endpoint
+Fill in:
+Title: Test Webhook
+Type: API Endpoint
+URL: paste your webhook.site URL
+Click Add
+Now go to your query → Edit → set Endpoint to Test Webhook → Save
+Step 3 — Update your HTML to poll for the result
+Since your page is a static GitHub Pages site (no backend), the cleanest approach is to poll webhook.site's API directly from your page to check if a scan arrived. Webhook.site has a free API for this.
+
+Replace your current index.html with this:
+
+html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proof of Human</title>
+    <style>
+        body { font-family: sans-serif; background: #0f0f0f; color: white; text-align: center; padding: 50px 20px; margin: 0; }
+        .qr-card {
+            background: white;
+            padding: 20px;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 20px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #qrcode canvas { width: 100% !important; height: auto !important; }
+        #status { margin-top: 20px; color: #00d1ff; font-weight: bold; font-size: 16px; }
+        #debug-log {
+            margin-top: 20px;
+            text-align: left;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 11px;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .log-ok  { color: #00ff88; }
+        .log-err { color: #ff4444; }
+        .log-info{ color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <h2>Verify Humanity</h2>
+
+    <div class="sharering-query"
+         queryId="69b75ef6169a014f92b5ca1e"
+         qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq"
+         mode="dynamic"
+         app="ShareRing Me"
+         oninit="onInit"
+         onscan="onScan">
+        <div class="qr-card">
+            <div id="qrcode"></div>
+        </div>
+    </div>
+
+    <div id="status">Loading SDK...</div>
+    <div id="debug-log"></div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/jquery.qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/sharering.query.lib.prod.min.js"></script>
+
+    <script>
+        // ✏️ PASTE YOUR WEBHOOK.SITE TOKEN HERE (the UUID part of your URL)
+        // e.g. if your URL is https://webhook.site/abc-123-xyz  → put "abc-123-xyz"
+        const WEBHOOK_TOKEN = "PASTE-YOUR-TOKEN-HERE";
+
+        let pollInterval = null;
+        let lastSeenId = null;
+
+        function log(msg, type = 'info') {
+            const el = document.getElementById('debug-log');
+            const time = new Date().toTimeString().split(' ')[0];
+            el.innerHTML += `<span class="log-${type}">[${time}] ${msg}\n</span>`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        // Called when QR code is ready
+        window.onInit = function(data) {
+            log('✅ SDK ready — QR generated', 'ok');
+            log('session data: ' + JSON.stringify(data), 'info');
+            document.getElementById('status').innerHTML = "✅ QR Code Ready<br><small>Scan with ShareRing Me app</small>";
+
+            // Start polling webhook.site for incoming scan results
+            startPolling();
+        };
+
+        // Called by ShareRing library if it detects the scan directly
+        window.onScan = function(data) {
+            log('🎉 onScan fired: ' + JSON.stringify(data), 'ok');
+            handleVerified(data);
+        };
+
+        function startPolling() {
+            if (!WEBHOOK_TOKEN || WEBHOOK_TOKEN === "PASTE-YOUR-TOKEN-HERE") {
+                log('⚠️ WEBHOOK_TOKEN not set — polling disabled', 'err');
+                return;
+            }
+            log('🔄 Polling webhook.site for scan result...', 'info');
+            pollInterval = setInterval(checkWebhook, 3000); // check every 3 seconds
+        }
+
+        async function checkWebhook() {
+            try {
+                const res = await fetch(
+                    `https://webhook.site/token/${WEBHOOK_TOKEN}/requests?page=1&per_page=1&sorting=newest`,
+                    { headers: { 'Accept': 'application/json' } }
+                );
+                const json = await res.json();
+
+                if (!json.data || json.data.length === 0) {
+                    log('...waiting for scan', 'info');
+                    return;
+                }
+
+                const latest = json.data[0];
+
+                // Only react to new requests we haven't seen yet
+                if (latest.uuid === lastSeenId) return;
+                lastSeenId = latest.uuid;
+
+                log('📨 Webhook received! Raw body:', 'ok');
+                log(latest.content, 'info');
+
+                // Try to parse the body as JSON
+                try {
+                    const body = JSON.parse(latest.content);
+                    handleVerified(body);
+                } catch(e) {
+                    log('Body is not JSON: ' + latest.content, 'info');
+                    // Still treat any incoming request as a successful scan
+                    handleVerified({ raw: latest.content });
+                }
+
+                clearInterval(pollInterval); // stop polling once we get a result
+
+            } catch(err) {
+                log('Poll error: ' + err.message, 'err');
+            }
+        }
+
+        function handleVerified(data) {
+            document.getElementById('status').innerHTML =
+                "<h3 style='color:#00ff88'>✅ Human Verified!</h3>";
+            log('Verified data: ' + JSON.stringify(data), 'ok');
+
+            // Telegram Mini App integration
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.sendData(JSON.stringify({
+                    status: "human_verified",
+                    data: data
+                }));
+            }
+        }
+    </script>
+</body>
+</html>
+```
+
+---
+
+## Step 4 — Wire it up
+
+1. Get your token from your webhook.site URL — it's the UUID part:
+```
+   https://webhook.site/abc12345-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         this is your WEBHOOK_TOKEN
+Paste it into the const WEBHOOK_TOKEN = "..." line in the code
+Commit & push to GitHub → wait ~60 seconds for Pages to deploy
+Open your page, scan the QR with ShareRing Me
+Watch the debug log on screen AND your webhook.site tab
+What you should see
+Location	Expected
+Debug log on page	📨 Webhook received! + the raw JSON body
+webhook.site tab	A green incoming POST with user's name data
+Page status	✅ Human Verified!
+Share the raw body that arrives at webhook.site — that tells us the exact field names ShareRing sends back, which we'll need to finalize the Telegram integration.
+
+Q: How do you want to receive the scan result on your page?
+A: https://webhook.site/abab9e9b-70af-49f8-9d9d-9cc92a6bc3ef
+
+10:48 AM
+Perfect — you've got your webhook.site URL. Here's exactly what to do:
+
+Your token is:
+abab9e9b-70af-49f8-9d9d-9cc92a6bc3ef
+2 things to do right now:
+1. Set it in the ShareRing dashboard
+Go to sharering.link → Endpoints → Add Endpoint:
+
+Title: Test Webhook
+Type: API Endpoint
+URL: https://webhook.site/abab9e9b-70af-49f8-9d9d-9cc92a6bc3ef
+Check Set as default → Add
+Then edit your query and make sure it's using this endpoint. Save.
+
+2. Update your index.html — just change this one line:
+Find:
+
+js
+const WEBHOOK_TOKEN = "PASTE-YOUR-TOKEN-HERE";
+Replace with:
+
+js
+const WEBHOOK_TOKEN = "abab9e9b-70af-49f8-9d9d-9cc92a6bc3ef";
+Commit and push. That's it — no other changes needed.
+
+Then test:
+Open https://foremancrypto.github.io/human-mini-app/
+Scan the QR with ShareRing Me
+Watch both:
+The debug log on your page
+The webhook.site tab in your browser
+Tell me what shows up in webhook.site after scanning — paste the raw body and we'll take it from there.
+
+give me the full html
+
+10:48 AM
+Here's your complete ready-to-deploy file:
+
+
+Viewed a file, created a file, read a file
+Viewed a file, created a file, read a file
+Your webhook token is already baked in — no edits needed. Just:
+
+Download the file above and push it to your foremancrypto.github.io/human-mini-app repo as index.html
+Make sure your ShareRing dashboard endpoint is set to https://webhook.site/abab9e9b-70af-49f8-9d9d-9cc92a6bc3ef
+Open the live page, scan, and watch the debug console on screen
+After scanning, paste what appears in the debug log and on webhook.site — that raw payload will tell us the exact field names ShareRing sends back so we can finalize the Telegram integration.
+
+Index
+Code · HTML 
+
+
+Want to be notified when Claude responds?
+
+
+
+Claude is AI and can make mistakes. Please double-check responses.
+Index · HTML
+Copy
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proof of Human</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #080b10;
+            --surface: #0f1520;
+            --border: #1c2a3a;
+            --accent: #00e5ff;
+            --accent2: #00ff88;
+            --danger: #ff4455;
+            --text: #e0eaf5;
+            --muted: #4a6070;
+            --glow: 0 0 24px rgba(0,229,255,0.18);
+        }
+ 
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+ 
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Syne', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 40px 20px 60px;
+            overflow-x: hidden;
+        }
+ 
+        /* Animated grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+ 
+        .container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 420px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+        }
+ 
+        /* Header */
+        .header {
+            text-align: center;
+            animation: fadeDown 0.6s ease both;
+        }
+ 
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0,229,255,0.08);
+            border: 1px solid rgba(0,229,255,0.2);
+            border-radius: 20px;
+            padding: 4px 14px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: var(--accent);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+        }
+ 
+        .badge::before {
+            content: '';
+            width: 6px; height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+ 
+        h1 {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            color: var(--text);
+        }
+ 
+        h1 span {
+            color: var(--accent);
+        }
+ 
+        .subtitle {
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--muted);
+            font-weight: 400;
+        }
+ 
+        /* QR Card */
+        .qr-wrapper {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            animation: fadeUp 0.6s 0.1s ease both;
+            position: relative;
+            overflow: hidden;
+        }
+ 
+        .qr-wrapper::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0.6;
+        }
+ 
+        .qr-card {
+            background: white;
+            padding: 16px;
+            border-radius: 12px;
+            width: 200px;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--glow);
+            position: relative;
+        }
+ 
+        /* Corner decorators on QR */
+        .qr-card::before,
+        .qr-card::after {
+            content: '';
+            position: absolute;
+            width: 20px; height: 20px;
+            border-color: var(--accent);
+            border-style: solid;
+            opacity: 0.7;
+        }
+        .qr-card::before { top: -4px; left: -4px; border-width: 2px 0 0 2px; border-radius: 3px 0 0 0; }
+        .qr-card::after  { bottom: -4px; right: -4px; border-width: 0 2px 2px 0; border-radius: 0 0 3px 0; }
+ 
+        #qrcode canvas { width: 100% !important; height: auto !important; }
+ 
+        .qr-hint {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            color: var(--muted);
+            text-align: center;
+            letter-spacing: 0.05em;
+        }
+ 
+        /* Status bar */
+        #status {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent);
+            animation: fadeUp 0.6s 0.2s ease both;
+            transition: all 0.4s ease;
+        }
+ 
+        #status.success {
+            border-color: rgba(0,255,136,0.3);
+            color: var(--accent2);
+            background: rgba(0,255,136,0.06);
+        }
+ 
+        #status.error {
+            border-color: rgba(255,68,85,0.3);
+            color: var(--danger);
+            background: rgba(255,68,85,0.06);
+        }
+ 
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            flex-shrink: 0;
+            animation: pulse 1.5s infinite;
+        }
+ 
+        /* Debug log */
+        .debug-panel {
+            width: 100%;
+            animation: fadeUp 0.6s 0.3s ease both;
+        }
+ 
+        .debug-title {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: var(--muted);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            padding-left: 4px;
+        }
+ 
+        #debug-log {
+            background: #040608;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            line-height: 1.7;
+            max-height: 180px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+ 
+        .log-ok   { color: var(--accent2); }
+        .log-err  { color: var(--danger); }
+        .log-info { color: #4a6070; }
+        .log-data { color: #7090a0; }
+ 
+        /* Success overlay */
+        .verified-overlay {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+        }
+ 
+        .verified-overlay.show { display: flex; }
+ 
+        .checkmark {
+            font-size: 48px;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+        }
+ 
+        .verified-text {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--accent2);
+        }
+ 
+        .verified-sub {
+            font-size: 12px;
+            color: var(--muted);
+            font-family: 'Share Tech Mono', monospace;
+        }
+ 
+        /* Animations */
+        @keyframes fadeDown {
+            from { opacity: 0; transform: translateY(-16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+ 
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+ 
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.3; }
+        }
+ 
+        @keyframes popIn {
+            from { transform: scale(0); opacity: 0; }
+            to   { transform: scale(1); opacity: 1; }
+        }
+ 
+        @keyframes scanLine {
+            0%   { top: 0; }
+            100% { top: 100%; }
+        }
+ 
+        /* Scan animation overlay on QR */
+        .scan-anim {
+            position: absolute;
+            left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            top: 0;
+            animation: scanLine 2s linear infinite;
+            pointer-events: none;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+ 
+    <!-- Header -->
+    <div class="header">
+        <div class="badge">ShareRing Link</div>
+        <h1>Proof of <span>Human</span></h1>
+        <p class="subtitle">Scan the QR code with ShareRing Me to verify your identity</p>
+    </div>
+ 
+    <!-- QR Card -->
+    <div class="qr-wrapper">
+        <div class="sharering-query"
+             queryId="69b75ef6169a014f92b5ca1e"
+             qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq"
+             mode="dynamic"
+             app="ShareRing Me"
+             oninit="onInit"
+             onscan="onScan">
+            <div class="qr-card">
+                <div class="scan-anim" id="scanAnim"></div>
+                <div id="qrcode"></div>
+            </div>
+        </div>
+ 
+        <p class="qr-hint">Open ShareRing Me → Scan → Approve</p>
+ 
+        <!-- Success state (hidden until verified) -->
+        <div class="verified-overlay" id="verifiedOverlay">
+            <div class="checkmark">✅</div>
+            <div class="verified-text">Human Verified</div>
+            <div class="verified-sub" id="verifiedName"></div>
+        </div>
+    </div>
+ 
+    <!-- Status -->
+    <div id="status">
+        <div class="status-dot"></div>
+        <span id="statusText">Loading SDK...</span>
+    </div>
+ 
+    <!-- Debug Log -->
+    <div class="debug-panel">
+        <div class="debug-title">// debug console</div>
+        <div id="debug-log"></div>
+    </div>
+ 
+</div>
+ 
+<!-- Scripts at bottom in correct order -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/jquery.qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/sharering.query.lib.prod.min.js"></script>
+ 
+<script>
+    // ─── CONFIG ────────────────────────────────────────────────
+    const WEBHOOK_TOKEN = "abab9e9b-70af-49f8-9d9d-9cc92a6bc3ef";
+    // ────────────────────────────────────────────────────────────
+ 
+    let pollInterval = null;
+    let lastSeenId   = null;
+    let verified     = false;
+ 
+    // ── Logging ──────────────────────────────────────────────────
+    function log(msg, type = 'info') {
+        const el   = document.getElementById('debug-log');
+        const time = new Date().toTimeString().split(' ')[0];
+        el.innerHTML += `<span class="log-${type}">[${time}] ${msg}\n</span>`;
+        el.scrollTop  = el.scrollHeight;
+    }
+ 
+    // ── Status helper ─────────────────────────────────────────────
+    function setStatus(msg, type = '') {
+        const el = document.getElementById('status');
+        el.className = type;
+        document.getElementById('statusText').textContent = msg;
+    }
+ 
+    // ── ShareRing callbacks ───────────────────────────────────────
+    window.onInit = function(data) {
+        log('✅ SDK ready — QR generated', 'ok');
+        if (data) log('init data: ' + JSON.stringify(data), 'data');
+        setStatus('QR Ready — scan with ShareRing Me app');
+ 
+        // Stop scan animation once QR is shown — restart on poll
+        startPolling();
+    };
+ 
+    window.onScan = function(data) {
+        log('🎉 onScan fired by library', 'ok');
+        log('data: ' + JSON.stringify(data), 'data');
+        handleVerified(data);
+    };
+ 
+    // ── Polling ───────────────────────────────────────────────────
+    function startPolling() {
+        if (!WEBHOOK_TOKEN || WEBHOOK_TOKEN === "PASTE-YOUR-TOKEN-HERE") {
+            log('⚠️ WEBHOOK_TOKEN not set', 'err');
+            return;
+        }
+        log('🔄 Polling webhook.site every 3s...', 'info');
+        pollInterval = setInterval(checkWebhook, 3000);
+    }
+ 
+    async function checkWebhook() {
+        if (verified) { clearInterval(pollInterval); return; }
+        try {
+            const res  = await fetch(
+                `https://webhook.site/token/${WEBHOOK_TOKEN}/requests?page=1&per_page=1&sorting=newest`,
+                { headers: { 'Accept': 'application/json' } }
+            );
+            const json = await res.json();
+ 
+            if (!json.data || json.data.length === 0) {
+                log('...waiting for scan', 'info');
+                return;
+            }
+ 
+            const latest = json.data[0];
+            if (latest.uuid === lastSeenId) {
+                log('...no new requests yet', 'info');
+                return;
+            }
+ 
+            lastSeenId = latest.uuid;
+            log('📨 Webhook received!', 'ok');
+            log('raw body: ' + latest.content, 'data');
+ 
+            try {
+                const body = JSON.parse(latest.content);
+                handleVerified(body);
+            } catch(e) {
+                // Body isn't JSON — still treat as verified scan
+                handleVerified({ raw: latest.content });
+            }
+ 
+        } catch(err) {
+            log('poll error: ' + err.message, 'err');
+        }
+    }
+ 
+    // ── Handle verified result ────────────────────────────────────
+    function handleVerified(data) {
+        if (verified) return;
+        verified = true;
+        clearInterval(pollInterval);
+ 
+        // Hide scan animation
+        const anim = document.getElementById('scanAnim');
+        if (anim) anim.style.display = 'none';
+ 
+        // Show verified overlay
+        const overlay = document.getElementById('verifiedOverlay');
+        overlay.classList.add('show');
+ 
+        // Try to show name if present
+        const name = data?.name || data?.result?.name || '';
+        if (name) {
+            document.getElementById('verifiedName').textContent = 'Name confirmed: ' + name;
+        }
+ 
+        setStatus('✅ Verification Complete!', 'success');
+        log('🏆 Verification complete', 'ok');
+        log('payload: ' + JSON.stringify(data, null, 2), 'data');
+ 
+        // Telegram Mini App
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.sendData(JSON.stringify({
+                status: "human_verified",
+                data: data
+            }));
+            log('📤 Sent to Telegram WebApp', 'ok');
+        }
+    }
+ 
+    // ── Environment check ─────────────────────────────────────────
+    log('protocol: ' + window.location.protocol,
+        window.location.protocol === 'https:' ? 'ok' : 'err');
+    log('host: ' + window.location.host, 'info');
+</script>
+</body>
+</html>
+ 
