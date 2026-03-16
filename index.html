@@ -4,11 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Proof of Human</title>
-    
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/jquery.qrcode.min.js"></script>
-    <!-- FIX 1: Use CDN instead of local file -->
-<script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/sharering.query.lib.prod.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #0f0f0f; color: white; text-align: center; padding: 50px 20px; margin: 0; }
         .qr-card {
@@ -24,17 +19,36 @@
         }
         #qrcode canvas { width: 100% !important; height: auto !important; }
         #status { margin-top: 20px; color: #00d1ff; font-weight: bold; }
+        #debug-log {
+            margin-top: 30px;
+            text-align: left;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 12px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .log-ok { color: #00ff88; }
+        .log-err { color: #ff4444; }
+        .log-info { color: #00d1ff; }
     </style>
 </head>
 <body>
 
     <h2>Verify Humanity</h2>
-    
-    <!-- FIX 2: Added onscan, FIX 3: mode="dynamic" -->
+
+    <!-- FIX: Added app="ShareRing Me" -->
     <div class="sharering-query" 
          queryId="69b75ef6169a014f92b5ca1e" 
          qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
          mode="dynamic"
+         app="ShareRing Me"
          oninit="onInit"
          onscan="onScan">
         <div class="qr-card">
@@ -42,20 +56,39 @@
         </div>
     </div>
 
-    <div id="status">Syncing local SDK...</div>
+    <div id="status">Loading SDK...</div>
+    <div id="debug-log"><span class="log-info">[debug] Waiting for SDK...</span></div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/jquery.qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/sharering.query.lib.prod.min.js"></script>
 
     <script>
-        // FIX 4: Removed the non-standard window.ShareRingLink config block
+        function appendLog(msg, type = 'info') {
+            const log = document.getElementById('debug-log');
+            const time = new Date().toISOString().split('T')[1].split('.')[0];
+            log.innerHTML += `\n<span class="log-${type}">[${time}] ${msg}</span>`;
+            console.log(`[${type}] ${msg}`);
+        }
 
         window.onInit = function(data) {
-            console.log("SDK Initialized!", data);
-            document.getElementById('status').innerHTML = "✅ QR Code Ready<br><small>Scan with ShareRing Me app</small>";
+            appendLog('✅ onInit fired!', 'ok');
+            appendLog('onInit data: ' + JSON.stringify(data, null, 2), 'info');
+            document.getElementById('status').innerHTML = "✅ QR Code Ready — Scan with ShareRing Me app";
+
+            // Check the session_id exists — library needs this to poll
+            if (!data || !data.session_id) {
+                appendLog('⚠️ WARNING: no session_id in onInit data — polling may fail', 'err');
+            } else {
+                appendLog('session_id: ' + data.session_id, 'ok');
+            }
         };
 
         window.onScan = function(data) {
-            console.log("SUCCESS! User verified:", data);
+            appendLog('🎉 onScan fired!', 'ok');
+            appendLog('onScan data: ' + JSON.stringify(data, null, 2), 'info');
             document.getElementById('status').innerHTML = "<h3 style='color:#00ff88'>✅ Verification Complete!</h3>";
-            
+
             if (window.Telegram && window.Telegram.WebApp) {
                 window.Telegram.WebApp.sendData(JSON.stringify({
                     status: "human_verified",
@@ -64,7 +97,21 @@
             }
         };
 
-        // FIX 5: Removed unnecessary manual init — library auto-initializes
+        // Diagnose environment
+        appendLog('Protocol: ' + window.location.protocol, 
+            window.location.protocol === 'https:' || window.location.hostname === 'localhost' ? 'ok' : 'err');
+        appendLog('Host: ' + window.location.host, 'info');
+
+        // Confirm library loaded
+        setTimeout(() => {
+            if (window.ShareRingQuery || window.$) {
+                appendLog('✅ jQuery loaded: ' + (typeof $ !== "undefined"), 'ok');
+                appendLog('ShareRingQuery object: ' + (typeof window.ShareRingQuery), 
+                    typeof window.ShareRingQuery !== 'undefined' ? 'ok' : 'err');
+            } else {
+                appendLog('❌ Scripts failed to load', 'err');
+            }
+        }, 1500);
     </script>
 </body>
 </html>
