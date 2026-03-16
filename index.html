@@ -2,80 +2,46 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="referrer" content="no-referrer-when-downgrade">
-    <title>Proof of Human | ShareRing</title>
-    
+    <title>Proof of Human</title>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.qrcode/1.0/jquery.qrcode.min.js"></script>
     
-    <script src="https://sharering.github.io/shareringlink-javascript-library/sharering.query.lib.prod.min.js" crossorigin="anonymous"></script>
+    <script src="sharering.query.lib.prod.min.js"></script>
 
     <style>
-        body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: white; text-align: center; padding: 50px 20px; margin: 0; }
-        .qr-card {
-            background: white;
-            padding: 25px;
-            width: 220px;
-            height: 220px;
-            margin: 0 auto 20px;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        #qrcode canvas { width: 100% !important; height: auto !important; }
-        #status { font-size: 16px; color: #00d1ff; margin-top: 20px; font-weight: 500; }
-        .error-text { color: #ff4d4d; font-weight: bold; }
+        body { background: #111; color: white; text-align: center; padding: 50px; font-family: sans-serif; }
+        .qr-box { background: white; padding: 20px; width: 200px; height: 200px; margin: 20px auto; border-radius: 10px; }
+        #qrcode canvas { width: 100%; height: auto; }
     </style>
 </head>
 <body>
 
-    <h2>Verify Humanity</h2>
-    <p style="color: #888;">Scan with the <b>ShareRing Me</b> app</p>
-
+    <h2>Scan to Verify</h2>
+    
     <div class="sharering-query" 
          queryId="69b75ef6169a014f92b5ca1e" 
          qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
          mode="static"
-         oninit="onInit"
-         onscan="onScan">
-        <div class="qr-card">
-            <div id="qrcode"></div>
-        </div>
+         oninit="onInit">
+        <div class="qr-box"><div id="qrcode"></div></div>
     </div>
 
-    <div id="status">Connecting to ShareLedger...</div>
+    <p id="status">Loading...</p>
 
     <script>
-      // 1. Define the functions GLOBALLY first
-window.onInit = function(data) {
-    console.log('SDK Callback: Init Success', data);
-    document.getElementById('status').innerText = "✅ QR Code Ready";
-};
+        // These MUST be global so the SDK can see them
+        window.onInit = function(data) {
+            document.getElementById('status').innerText = "✅ QR Ready";
+        };
 
-window.onScan = function(data) {
-    console.log('SDK Callback: Scan Success', data);
-    document.getElementById('status').innerHTML = "✅ Verified!";
-};
-
-// 2. Set Global Config
-window.ShareRingLink = {
-    baseUrl: "https://api.sharering.link/v1",
-    mode: "static"
-};
-
-$(document).ready(function() {
-    console.log("Page ready. Booting SDK...");
-    
-    // 3. Manual Init call
-    setTimeout(() => {
-        if (window.ShareRingQuery) {
-            window.ShareRingQuery.init();
-        }
-    }, 1000);
-});
+        $(document).ready(function() {
+            setTimeout(() => {
+                if (window.ShareRingQuery) {
+                    window.ShareRingQuery.init();
+                } else {
+                    document.getElementById('status').innerText = "❌ Script file missing in repo!";
+                }
+            }, 1000);
+        });
     </script>
 </body>
 </html>
