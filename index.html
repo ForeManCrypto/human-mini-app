@@ -45,35 +45,42 @@
     <div id="status">Syncing local SDK...</div>
 
     <script>
-       // 1. When the SDK starts successfully, hide any errors and show success
+ // 1. Define the success callback
 window.onInit = function(data) {
     console.log("SDK Initialized!", data);
-    document.getElementById('status').innerHTML = "✅ QR Code Ready";
+    // Hide the 'Syncing' text and show a real instruction
+    document.getElementById('status').innerHTML = "✅ QR Code Ready<br><small>Scan with ShareRing Me app</small>";
 };
 
-// 2. The Kickstart logic
+// 2. Define the callback for when they actually scan
+window.onScan = function(data) {
+    console.log("SUCCESS! User verified:", data);
+    document.getElementById('status').innerHTML = "<h3 style='color:#00ff88'>✅ Verification Complete!</h3>";
+    
+    // This is where you'll tell Telegram the user is good to go
+    if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.sendData(JSON.stringify({
+            status: "human_verified",
+            session: data.session_id
+        }));
+    }
+};
+
+window.ShareRingLink = {
+    baseUrl: "https://api.sharering.link/v1",
+    mode: "static"
+};
+
 $(document).ready(function() {
+    // Only show an error if the script actually fails to load after 3 seconds
     setTimeout(() => {
         if (window.ShareRingQuery) {
             window.ShareRingQuery.init();
-            // We don't need to do anything else here because onInit will handle the status
         } else {
-            // ONLY show this if the library is actually missing
-            document.getElementById('status').innerHTML = "<span style='color:red'>❌ Error: SDK Library not loaded.</span>";
+            document.getElementById('status').innerHTML = "<span style='color:red'>❌ Error: SDK Library failed to load.</span>";
         }
     }, 1000);
 });
-
-        // 3. Kickstart the SDK after the page loads
-        $(document).ready(function() {
-            setTimeout(() => {
-                if (window.ShareRingQuery) {
-                    window.ShareRingQuery.init();
-                } else {
-                    document.getElementById('status').innerHTML = "<span style='color:red'>❌ Error: sharering.query.lib.prod.min.js not found in repo.</span>";
-                }
-            }, 1000);
-        });
     </script>
 </body>
 </html>
