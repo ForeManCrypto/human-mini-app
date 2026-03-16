@@ -189,6 +189,15 @@
         .verified-overlay.show { display: flex; }
         .checkmark { font-size: 56px; animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both; }
         .verified-text { font-size: 22px; font-weight: 800; color: var(--accent2); }
+        .verified-profile {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            color: var(--accent);
+            background: rgba(0,229,255,0.06);
+            border: 1px solid rgba(0,229,255,0.15);
+            border-radius: 8px;
+            padding: 8px 16px;
+        }
         .verified-sub { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--muted); text-align: center; }
 
         #status {
@@ -256,6 +265,7 @@
         <div class="verified-overlay" id="verifiedOverlay">
             <div class="checkmark">✅</div>
             <div class="verified-text">Human Verified</div>
+            <div class="verified-profile" id="verifiedProfile" style="display:none"></div>
             <div class="verified-sub" id="verifiedSub">Approving your join request...</div>
         </div>
     </div>
@@ -273,66 +283,62 @@
 <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/sharering.query.lib.prod.min.js"></script>
 
 <script>
-    // ── Config ────────────────────────────────────────────────────
-    var WORKER_URL = 'https://human-bot-worker.moneyforeman.workers.dev';
-
-    // ── Read chat_id passed by the Telegram bot in the URL ────────
-    var urlParams  = new URLSearchParams(window.location.search);
-    var chatId     = urlParams.get('chat_id') || '';
+    var WORKER_URL      = 'https://human-bot-worker.moneyforeman.workers.dev';
+    var urlParams       = new URLSearchParams(window.location.search);
+    var chatId          = urlParams.get('chat_id') || '';
     var trustedSessionId = null;
-
-    console.log('chat_id:', chatId);
+    var pollHandle      = null;
+    var pollCount       = 0;
+    var maxPolls        = 15; // 15 × 1.5s = ~22 seconds max
 
     function setStatus(msg, type) {
         document.getElementById('status').className = type || '';
         document.getElementById('statusText').textContent = msg;
     }
 
-    // ── ShareRing callbacks ───────────────────────────────────────
-
+    // ── onInit: QR is rendered and ready ─────────────────────────
     window.onInit = function(data) {
         console.log('onInit', data);
-        // Store the real session_id generated for this QR
-trustedSessionId = data && (data.session_id || data.sessionId);
+
+        // Accept both session_id and sessionId — ShareRing uses both
+        trustedSessionId = data && (data.session_id || data.sessionId);
+        console.log('Trusted session_id:', trustedSessionId);
+
         document.getElementById('srLoading').style.display = 'none';
         document.querySelector('.sharering-query').style.display = 'inline-block';
         document.getElementById('qrHint').style.display = 'block';
         setStatus('QR Ready — scan with ShareRing Me app');
     };
 
+    // ── onScan: user approved in ShareRing Me app ─────────────────
     window.onScan = function(data) {
         console.log('onScan fired', data);
-        // Don't trust the client — verify against our Worker first
         setStatus('Verifying with server...');
-        verifyWithWorker();
-    };
-
-    // ── Poll Worker to confirm ShareRing actually POSTed ──────────
-    // Retries for up to 15 seconds (ShareRing may take a moment to POST)
-    var pollCount  = 0;
-    var maxPolls   = 10;
-    var pollHandle = null;
-
-    function verifyWithWorker() {
-        if (!trustedSessionId) {
-            setStatus('Session error — please refresh', 'error');
-            return;
-        }
+        // Start polling Worker — only show green when Worker confirms
         pollCount = 0;
         pollHandle = setInterval(doPoll, 1500);
-    }
+    };
 
+    // ── Poll Worker until it confirms ShareRing POSTed ────────────
     async function doPoll() {
         pollCount++;
+
         if (pollCount > maxPolls) {
             clearInterval(pollHandle);
             setStatus('Verification timed out — please try again', 'error');
             return;
         }
 
+        if (!trustedSessionId) {
+            clearInterval(pollHandle);
+            setStatus('Session error — please refresh', 'error');
+            return;
+        }
+
         try {
             var res  = await fetch(WORKER_URL + '/check?session=' + trustedSessionId);
             var json = await res.json();
+            console.log('Poll result:', json);
 
             if (json.verified) {
                 clearInterval(pollHandle);
@@ -345,22 +351,35 @@ trustedSessionId = data && (data.session_id || data.sessionId);
         }
     }
 
-    // ── Handle confirmed verification ─────────────────────────────
+    // ── Server confirmed — show green and notify Telegram ─────────
     function handleVerified(data) {
         document.getElementById('qrSection').classList.add('hidden');
         document.getElementById('verifiedOverlay').classList.add('show');
+
+        // Extract social profile (no PII)
+        var profile = (data.values && data.values.personal_social_profile)
+                   || (data.result && data.result.trim())
+                   || '';
+
+        if (profile) {
+            var el = document.getElementById('verifiedProfile');
+            el.textContent = '@ ' + profile;
+            el.style.display = 'block';
+        }
+
         setStatus('✅ Verified! Approving join request...', 'success');
 
-        // Send to Telegram bot — bot approves the join request
+        // Notify Telegram bot — bot approves the group join request
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.sendData(JSON.stringify({
-                action: 'human_verified',
-                chat_id: chatId
+                action:   'human_verified',
+                chat_id:  chatId,
+                profile:  profile  // optional — bot can log it if needed
             }));
         } else {
-            // Browser test mode
-            console.log('Test mode — Telegram not detected');
-            document.getElementById('verifiedSub').textContent = 'Verified! (test mode)';
+            // Running in browser outside Telegram (dev/test)
+            console.log('Test mode — not inside Telegram');
+            document.getElementById('verifiedSub').textContent = 'Verified! (browser test mode)';
         }
     }
 </script>
