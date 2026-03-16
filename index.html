@@ -49,46 +49,33 @@
     <div id="status">Connecting to ShareLedger...</div>
 
     <script>
-        // 1. Force Global Config to point to Mainnet API
-        window.ShareRingLink = {
-            baseUrl: "https://api.sharering.link/v1",
-            mode: "static"
-        };
+      // 1. Define the functions GLOBALLY first
+window.onInit = function(data) {
+    console.log('SDK Callback: Init Success', data);
+    document.getElementById('status').innerText = "✅ QR Code Ready";
+};
 
-        // 2. Fallback for the SDK callback functions
-        function onInit(data) {
-            console.log("SDK Callback: Init Success", data);
-            document.getElementById('status').innerText = "✅ QR Code Ready";
+window.onScan = function(data) {
+    console.log('SDK Callback: Scan Success', data);
+    document.getElementById('status').innerHTML = "✅ Verified!";
+};
+
+// 2. Set Global Config
+window.ShareRingLink = {
+    baseUrl: "https://api.sharering.link/v1",
+    mode: "static"
+};
+
+$(document).ready(function() {
+    console.log("Page ready. Booting SDK...");
+    
+    // 3. Manual Init call
+    setTimeout(() => {
+        if (window.ShareRingQuery) {
+            window.ShareRingQuery.init();
         }
-
-        function onScan(data) {
-            console.log("SDK Callback: Scan Success", data);
-            document.getElementById('status').innerHTML = "<span style='color:#00ff88'>✅ Verified Successfully!</span>";
-        }
-
-        // 3. The "Manual Bridge" logic
-        $(document).ready(function() {
-            console.log("Page ready. Initializing SDK...");
-            
-            // Give the library 2 seconds to load and clear any local analysis
-            setTimeout(() => {
-                if (window.ShareRingQuery) {
-                    try {
-                        // Force manual initialization with the working parameters
-                        window.ShareRingQuery.init({
-                            queryId: "69b75ef6169a014f92b5ca1e",
-                            qrcodeOwner: "shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq",
-                            mode: "static"
-                        });
-                    } catch (err) {
-                        console.error("Init Error:", err);
-                        document.getElementById('status').innerHTML = '<span class="error-text">Handshake Failed. Check Dashboard Settings.</span>';
-                    }
-                } else {
-                    document.getElementById('status').innerHTML = '<span class="error-text">SDK Library not detected.</span>';
-                }
-            }, 2000);
-        });
+    }, 1000);
+});
     </script>
 </body>
 </html>
