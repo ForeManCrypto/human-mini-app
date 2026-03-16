@@ -49,11 +49,11 @@
             position: relative;
             z-index: 1;
             width: 100%;
-            max-width: 420px;
+            max-width: 460px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 24px;
+            gap: 20px;
         }
 
         .header {
@@ -85,23 +85,80 @@
             animation: pulse 1.5s infinite;
         }
 
-        h1 {
-            font-size: 28px;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            line-height: 1.1;
-            color: var(--text);
-        }
-
+        h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
         h1 span { color: var(--accent); }
+        .subtitle { margin-top: 8px; font-size: 13px; color: var(--muted); font-weight: 400; }
 
-        .subtitle {
-            margin-top: 8px;
-            font-size: 13px;
-            color: var(--muted);
-            font-weight: 400;
+        /* Two-column mode tester */
+        .mode-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            width: 100%;
+            animation: fadeUp 0.6s 0.1s ease both;
         }
 
+        .mode-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        .mode-card:hover { border-color: rgba(0,229,255,0.3); }
+        .mode-card.active { border-color: var(--accent2); }
+
+        .mode-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0.5;
+        }
+
+        .mode-label {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: var(--muted);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .qr-card {
+            background: white;
+            padding: 10px;
+            border-radius: 10px;
+            width: 160px;
+            height: 160px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--glow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .qr-card canvas { width: 100% !important; height: auto !important; }
+
+        .scan-anim {
+            position: absolute;
+            left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            top: 0;
+            animation: scanLine 2s linear infinite;
+            pointer-events: none;
+        }
+
+        /* Full-width QR card for final working mode */
         .qr-wrapper {
             width: 100%;
             background: var(--surface);
@@ -126,10 +183,7 @@
             opacity: 0.6;
         }
 
-        .qr-section { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-        .qr-section.hidden { display: none; }
-
-        .qr-card {
+        .qr-card-lg {
             background: white;
             padding: 16px;
             border-radius: 12px;
@@ -143,8 +197,8 @@
             overflow: hidden;
         }
 
-        .qr-card::before,
-        .qr-card::after {
+        .qr-card-lg::before,
+        .qr-card-lg::after {
             content: '';
             position: absolute;
             width: 20px; height: 20px;
@@ -153,61 +207,21 @@
             opacity: 0.7;
             z-index: 2;
         }
-        .qr-card::before { top: -4px; left: -4px; border-width: 2px 0 0 2px; border-radius: 3px 0 0 0; }
-        .qr-card::after  { bottom: -4px; right: -4px; border-width: 0 2px 2px 0; border-radius: 0 0 3px 0; }
+        .qr-card-lg::before { top: -4px; left: -4px; border-width: 2px 0 0 2px; border-radius: 3px 0 0 0; }
+        .qr-card-lg::after  { bottom: -4px; right: -4px; border-width: 0 2px 2px 0; border-radius: 0 0 3px 0; }
 
-        #qrcode canvas { width: 100% !important; height: auto !important; }
-
-        .scan-anim {
-            position: absolute;
-            left: 0; right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--accent), transparent);
-            top: 0;
-            animation: scanLine 2s linear infinite;
-            pointer-events: none;
-            z-index: 1;
-        }
+        .qr-card-lg canvas { width: 100% !important; height: auto !important; }
 
         .qr-hint {
             font-family: 'Share Tech Mono', monospace;
             font-size: 12px;
             color: var(--muted);
             text-align: center;
-            letter-spacing: 0.05em;
         }
 
-        .verified-overlay {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            padding: 10px 0;
-            width: 100%;
-        }
-        .verified-overlay.show { display: flex; }
+        .qr-section.hidden { display: none; }
 
-        .checkmark {
-            font-size: 56px;
-            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
-        }
-
-        .verified-text {
-            font-size: 22px;
-            font-weight: 800;
-            color: var(--accent2);
-        }
-
-        .verified-name {
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 13px;
-            color: var(--muted);
-            background: rgba(0,255,136,0.06);
-            border: 1px solid rgba(0,255,136,0.15);
-            border-radius: 8px;
-            padding: 8px 16px;
-        }
-
+        /* Status */
         #status {
             width: 100%;
             background: var(--surface);
@@ -223,16 +237,8 @@
             animation: fadeUp 0.6s 0.2s ease both;
             transition: all 0.4s ease;
         }
-        #status.success {
-            border-color: rgba(0,255,136,0.3);
-            color: var(--accent2);
-            background: rgba(0,255,136,0.06);
-        }
-        #status.error {
-            border-color: rgba(255,68,85,0.3);
-            color: var(--danger);
-            background: rgba(255,68,85,0.06);
-        }
+        #status.success { border-color: rgba(0,255,136,0.3); color: var(--accent2); background: rgba(0,255,136,0.06); }
+        #status.error   { border-color: rgba(255,68,85,0.3);  color: var(--danger);  background: rgba(255,68,85,0.06); }
 
         .status-dot {
             width: 8px; height: 8px;
@@ -244,66 +250,114 @@
         #status.success .status-dot,
         #status.error   .status-dot { animation: none; }
 
-        @keyframes fadeDown {
-            from { opacity: 0; transform: translateY(-16px); }
-            to   { opacity: 1; transform: translateY(0); }
+        /* Debug log */
+        .debug-panel { width: 100%; animation: fadeUp 0.6s 0.3s ease both; }
+        .debug-title {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px; color: var(--muted);
+            letter-spacing: 0.15em; text-transform: uppercase;
+            margin-bottom: 8px; padding-left: 4px;
         }
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(16px); }
-            to   { opacity: 1; transform: translateY(0); }
+        #debug-log {
+            background: #040608;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px; line-height: 1.7;
+            max-height: 220px; overflow-y: auto;
+            white-space: pre-wrap; word-break: break-all;
         }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50%       { opacity: 0.3; }
+        .log-ok   { color: var(--accent2); }
+        .log-err  { color: var(--danger); }
+        .log-info { color: #4a6070; }
+        .log-data { color: #7090a0; }
+
+        /* Verified */
+        .verified-overlay { display: none; flex-direction: column; align-items: center; gap: 12px; padding: 10px 0; width: 100%; }
+        .verified-overlay.show { display: flex; }
+        .checkmark { font-size: 56px; animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both; }
+        .verified-text { font-size: 22px; font-weight: 800; color: var(--accent2); }
+        .verified-name {
+            font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--muted);
+            background: rgba(0,255,136,0.06); border: 1px solid rgba(0,255,136,0.15);
+            border-radius: 8px; padding: 8px 16px;
         }
-        @keyframes popIn {
-            from { transform: scale(0); opacity: 0; }
-            to   { transform: scale(1); opacity: 1; }
-        }
-        @keyframes scanLine {
-            0%   { top: -2px; }
-            100% { top: 100%; }
-        }
+
+        @keyframes fadeDown { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeUp   { from { opacity:0; transform:translateY(16px);  } to { opacity:1; transform:translateY(0); } }
+        @keyframes pulse    { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+        @keyframes popIn    { from { transform:scale(0); opacity:0; } to { transform:scale(1); opacity:1; } }
+        @keyframes scanLine { 0% { top:-2px; } 100% { top:100%; } }
     </style>
 </head>
 <body>
 <div class="container">
 
     <div class="header">
-        <div class="badge">ShareRing Link</div>
+        <div class="badge">ShareRing Link · Debug Mode</div>
         <h1>Proof of <span>Human</span></h1>
-        <p class="subtitle">Scan the QR code with ShareRing Me to verify your identity</p>
+        <p class="subtitle">Testing both modes — scan each and see which fires onScan</p>
     </div>
 
-    <div class="qr-wrapper">
+    <!-- Side-by-side mode test -->
+    <div class="mode-row">
 
-        <div class="qr-section" id="qrSection">
+        <!-- STATIC mode -->
+        <div class="mode-card" id="card-static">
+            <div class="mode-label">mode="static"</div>
+            <div class="sharering-query"
+                 queryId="69b75ef6169a014f92b5ca1e"
+                 qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq"
+                 mode="static"
+                 app="ShareRing Me"
+                 oninit="onInitStatic"
+                 onscan="onScanStatic">
+                <div class="qr-card">
+                    <div class="scan-anim"></div>
+                    <div id="qrcode-static"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DYNAMIC mode -->
+        <div class="mode-card" id="card-dynamic">
+            <div class="mode-label">mode="dynamic"</div>
             <div class="sharering-query"
                  queryId="69b75ef6169a014f92b5ca1e"
                  qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq"
                  mode="dynamic"
                  app="ShareRing Me"
-                 oninit="onInit"
-                 onscan="onScan">
+                 oninit="onInitDynamic"
+                 onscan="onScanDynamic">
                 <div class="qr-card">
                     <div class="scan-anim"></div>
-                    <div id="qrcode"></div>
+                    <div id="qrcode-dynamic"></div>
                 </div>
             </div>
-            <p class="qr-hint">Open ShareRing Me → Scan → Approve</p>
-        </div>
-
-        <div class="verified-overlay" id="verifiedOverlay">
-            <div class="checkmark">✅</div>
-            <div class="verified-text">Human Verified</div>
-            <div class="verified-name" id="verifiedName" style="display:none"></div>
         </div>
 
     </div>
 
+    <!-- Status -->
     <div id="status">
         <div class="status-dot"></div>
-        <span id="statusText">Loading SDK...</span>
+        <span id="statusText">Loading SDK — waiting for QR codes...</span>
+    </div>
+
+    <!-- Verified overlay (shared) -->
+    <div class="qr-wrapper" id="verifiedWrapper" style="display:none">
+        <div class="verified-overlay show">
+            <div class="checkmark">✅</div>
+            <div class="verified-text">Human Verified</div>
+            <div class="verified-name" id="verifiedName" style="display:none"></div>
+        </div>
+    </div>
+
+    <!-- Debug log -->
+    <div class="debug-panel">
+        <div class="debug-title">// debug console</div>
+        <div id="debug-log"></div>
     </div>
 
 </div>
@@ -313,34 +367,58 @@
 <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/sharering.query.lib.prod.min.js"></script>
 
 <script>
+    function log(msg, type) {
+        var el   = document.getElementById('debug-log');
+        var time = new Date().toTimeString().split(' ')[0];
+        el.innerHTML += '<span class="log-' + (type||'info') + '">[' + time + '] ' + msg + '\n</span>';
+        el.scrollTop = el.scrollHeight;
+    }
+
     function setStatus(msg, type) {
         document.getElementById('status').className = type || '';
         document.getElementById('statusText').textContent = msg;
     }
 
-    // Fires when QR is ready
-    window.onInit = function(data) {
-        console.log('onInit', data);
-        setStatus('QR Ready — scan with ShareRing Me app');
+    // ── STATIC callbacks ──────────────────────────────────────────
+    window.onInitStatic = function(data) {
+        log('✅ [STATIC] onInit fired', 'ok');
+        log('[STATIC] session_id: ' + (data && data.session_id ? data.session_id : 'MISSING'), data && data.session_id ? 'ok' : 'err');
+        document.getElementById('card-static').classList.add('active');
+        setStatus('Static QR ready — scan it');
     };
 
-    // Fires when user approves the scan in ShareRing Me app
-    window.onScan = function(data) {
-        console.log('onScan', data);
-        handleVerified(data);
+    window.onScanStatic = function(data) {
+        log('🎉 [STATIC] onScan fired!', 'ok');
+        log('[STATIC] data: ' + JSON.stringify(data), 'data');
+        handleVerified(data, 'static');
     };
 
-    function handleVerified(data) {
-        // Swap QR for success screen
-        document.getElementById('qrSection').classList.add('hidden');
-        document.getElementById('verifiedOverlay').classList.add('show');
+    // ── DYNAMIC callbacks ─────────────────────────────────────────
+    window.onInitDynamic = function(data) {
+        log('✅ [DYNAMIC] onInit fired', 'ok');
+        log('[DYNAMIC] session_id: ' + (data && data.session_id ? data.session_id : 'MISSING'), data && data.session_id ? 'ok' : 'err');
+        document.getElementById('card-dynamic').classList.add('active');
+        setStatus('Dynamic QR ready — scan it');
+    };
 
-        // Try every known path ShareRing might use for the name field
+    window.onScanDynamic = function(data) {
+        log('🎉 [DYNAMIC] onScan fired!', 'ok');
+        log('[DYNAMIC] data: ' + JSON.stringify(data), 'data');
+        handleVerified(data, 'dynamic');
+    };
+
+    // ── Handle verified ───────────────────────────────────────────
+    function handleVerified(data, mode) {
+        log('🏆 VERIFIED via ' + mode + ' mode', 'ok');
+
+        document.querySelector('.mode-row').style.display = 'none';
+        document.getElementById('verifiedWrapper').style.display = 'block';
+
         var name = (data && (
             data.name ||
-            (data.result  && data.result.name)  ||
+            (data.result     && data.result.name)     ||
             (data.attributes && data.attributes.name) ||
-            (data.data && data.data.name)
+            (data.data       && data.data.name)
         )) || '';
 
         if (name) {
@@ -349,17 +427,20 @@
             el.style.display = 'block';
         }
 
-        setStatus('✅ Verification Complete!', 'success');
+        setStatus('✅ Verification Complete! (' + mode + ' mode worked)', 'success');
 
-        // Telegram Mini App — send result back to bot
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.sendData(JSON.stringify({
                 status: 'human_verified',
                 session_id: (data && data.session_id) || '',
                 name: name
             }));
+            log('📤 Sent to Telegram WebApp', 'ok');
         }
     }
+
+    log('protocol: ' + window.location.protocol, window.location.protocol === 'https:' ? 'ok' : 'err');
+    log('Initialising both modes...', 'info');
 </script>
 </body>
 </html>
