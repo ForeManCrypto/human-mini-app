@@ -1,33 +1,70 @@
-<script src="sharering.query.lib.prod.min.js"></script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proof of Human</title>
+    
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    <script src="sharering.query.lib.prod.min.js"></script>
 
-<script>
-    // 1. Define functions globally first
-    window.onInit = function(data) {
-        console.log('SDK initialized:', data);
-        document.getElementById('status').innerText = "✅ QR Ready - Scan now";
-    };
+    <style>
+        body { font-family: sans-serif; background: #0f0f0f; color: white; text-align: center; padding: 50px 20px; margin: 0; }
+        .qr-card {
+            background: white;
+            padding: 20px;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 20px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #qrcode canvas { width: 100% !important; height: auto !important; }
+        #status { margin-top: 20px; color: #00d1ff; font-weight: bold; }
+    </style>
+</head>
+<body>
 
-    window.onScan = function(data) {
-        console.log('Scan success:', data);
-        document.getElementById('status').innerText = "✅ Verified!";
-    };
+    <h2>Verify Humanity</h2>
+    
+    <div class="sharering-query" 
+         queryId="69b75ef6169a014f92b5ca1e" 
+         qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
+         mode="static"
+         oninit="onInit">
+        <div class="qr-card">
+            <div id="qrcode"></div>
+        </div>
+    </div>
 
-    // 2. Set Global Config
-    window.ShareRingLink = {
-        baseUrl: "https://api.sharering.link/v1",
-        mode: "static"
-    };
+    <div id="status">Syncing local SDK...</div>
 
-    $(document).ready(function() {
-        console.log("Page ready. Initializing local SDK...");
-        
-        setTimeout(() => {
-            // Check if YOUR local file loaded correctly
-            if (window.ShareRingQuery) {
-                window.ShareRingQuery.init();
-            } else {
-                document.getElementById('status').innerHTML = "<span style='color:red'>❌ Local SDK file missing! Check your GitHub repo.</span>";
-            }
-        }, 1500);
-    });
-</script>
+    <script>
+        // 1. Define the callback GLOBALLY so the SDK can find it
+        window.onInit = function(data) {
+            console.log("SDK Initialized!", data);
+            document.getElementById('status').innerText = "✅ QR Code Ready";
+        };
+
+        // 2. Set the Global Environment
+        window.ShareRingLink = {
+            baseUrl: "https://api.sharering.link/v1",
+            mode: "static"
+        };
+
+        // 3. Kickstart the SDK after the page loads
+        $(document).ready(function() {
+            setTimeout(() => {
+                if (window.ShareRingQuery) {
+                    window.ShareRingQuery.init();
+                } else {
+                    document.getElementById('status').innerHTML = "<span style='color:red'>❌ Error: sharering.query.lib.prod.min.js not found in repo.</span>";
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
