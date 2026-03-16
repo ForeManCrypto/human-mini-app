@@ -2,119 +2,65 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Proof of Human</title>
-    
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <title>QR Render Test</title>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.qrcode/1.0/jquery.qrcode.min.js"></script>
-    <script src="https://raw.githack.com/ShareRing/shareringlink-javascript-library/master/sharering.query.lib.prod.min.js" crossorigin="anonymous"></script> 
-    
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
+    <script src="https://raw.githack.com/ShareRing/shareringlink-javascript-library/master/sharering.query.lib.prod.min.js"></script>
 
     <style>
-        body { font-family: 'Roboto', sans-serif; background:#0f0f0f; color:#fff; text-align:center; padding:40px 20px; margin:0; }
-        .container { max-width: 400px; margin: 0 auto; }
-        h1 { font-size: 24px; margin-bottom: 10px; }
-        p { color: #aaa; font-size: 16px; margin-bottom: 30px; }
-        
-        .qrcode-content {
-            margin: 0 auto;
-            width: 160px; 
-            height: 160px;
-            background: #fff;
-            padding: 12px;
-            border-radius: 12px;
+        body { background: #111; color: white; text-align: center; padding-top: 50px; font-family: sans-serif; }
+        /* This container MUST be visible and have a size for the QR to draw */
+        .qrcode-container {
+            background: white;
+            padding: 20px;
+            width: 200px;
+            height: 200px;
+            margin: 20px auto;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
-
-        #qrcode canvas, #qrcode img {
-            width: 100% !important;
-            height: auto !important;
-            display: block;
-        }
-
-        #status { margin-top: 30px; font-size: 16px; color: #00ff88; min-height: 50px; }
-        .error { color: #ff5555; font-weight: bold; }
+        canvas { width: 100% !important; height: auto !important; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>Are you human?</h1>
-    <p>Scan with <b>ShareRing Me</b> app.<br>Verify your humanity to join.</p>
+    <h2>Scan to Verify</h2>
     
     <div class="sharering-query" 
          queryId="69b75ef6169a014f92b5ca1e" 
-         mode="static" 
          qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
-         oninit="onInit" 
-         onscan="onScan">
-        <div class="qrcode-content">
+         mode="static">
+        <div class="qrcode-container">
             <div id="qrcode"></div>
         </div>
     </div>
 
-    <div id="status">Syncing with ShareLedger...</div>
-</div>
+    <p id="msg">Loading QR...</p>
 
-<script>
-    const tg = window.Telegram.WebApp;
+    <script>
+        // Force the SDK to ignore automatic settings and use Mainnet
+        window.ShareRingLink = {
+            baseUrl: "https://api.sharering.link/v1",
+            mode: "static"
+        };
 
-    // Global Configuration for Mainnet
-    window.ShareRingLink = {
-        baseUrl: "https://api.sharering.link/v1",
-        mode: "static"
-    };
-
-    $(document).ready(function() {
-        tg.ready();
-        tg.expand();
-        
-        // Manual Kickstart to avoid "Auto-Analyze" timing issues
-        setTimeout(() => {
-            if (window.ShareRingQuery) {
-                console.log("Initializing ShareRing SDK...");
-                try {
-                    window.ShareRingQuery.init();
-                } catch (err) {
-                    console.error("SDK Analysis Failed:", err);
-                    document.getElementById('status').innerHTML = '<span class="error">Analysis Error. Check Dashboard Endpoint/Attributes.</span>';
+        $(document).ready(function() {
+            // Give the browser a moment to breathe, then force the render
+            setTimeout(() => {
+                if (window.ShareRingQuery) {
+                    try {
+                        window.ShareRingQuery.init();
+                        document.getElementById('msg').innerText = "QR Rendered (Check below)";
+                    } catch (e) {
+                        document.getElementById('msg').innerText = "Error: " + e.message;
+                    }
+                } else {
+                    document.getElementById('msg').innerText = "SDK Library not loaded.";
                 }
-            }
-        }, 1500);
-    });
-
-    function onInit(data) {
-        console.log('SDK initialized:', data);
-        document.getElementById('status').textContent = '✅ QR Code Ready';
-    }
-
-    function onScan(data) {
-        console.log('Scan Success:', data);
-        document.getElementById('status').innerHTML = '✅ Human Verified!<br>Returning to Telegram...';
-        
-        // Send data back to Telegram Bot
-        tg.sendData(JSON.stringify({
-            action: 'human_verified',
-            queryId: "69b75ef6169a014f92b5ca1e",
-            verified: true
-        }));
-
-        setTimeout(() => tg.close(), 2500);
-    }
-
-    // Capture specific ShareRing errors
-    window.addEventListener('error', function(e) {
-        if (e.message.includes('analyze')) {
-            document.getElementById('status').innerHTML = '<span class="error">Analyze Error: Verify Dashboard Configuration.</span>';
-        }
-    });
-</script>
-
+            }, 1000);
+        });
+    </script>
 </body>
 </html>
