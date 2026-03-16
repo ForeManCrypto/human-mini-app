@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!DOCTYPE html>
-<html lang="en">
-<head>
     <meta charset="UTF-8">
     <title>Proof of Human</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -77,62 +74,5 @@
             }
         }, 8000);  // Longer timeout for safety
     </script>
-</body>
-</html>
-    </style>
-</head>
-<body>
-    <h1>Prove You Are Human</h1>
-    <p>Scan with <b>ShareRing Me</b> app.<br>Biometric check — privacy-first.</p>
-    
-    <div class="sharering-query"
-         queryId="69964833c65d9f316f5ea3dd"
-         mode="basic"
-         qrcodeOwner="shareledger16ac92ru7rhdn2ruxur4a7cyszexha39dr6re39"
-         app="ShareRing Me"
-         oninit="onInit"
-         onscan="onScan">
-        <div id="qrcode"></div>  <!-- Explicit container for QR -->
-    </div>
-
-    <div id="status">Loading QR code...</div>
-
-    <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
-
-    const urlParams = new URLSearchParams(location.search);
-    const chatId = urlParams.get('chat_id') || 'unknown';
-
-    function onInit(data) {
-        console.log('ShareRing SDK initialized:', data);
-        document.getElementById('status').textContent = 'QR ready — scan with ShareRing Me app';
-    }
-
-    function onScan(data) {
-        console.log('Scan success:', data);
-        document.getElementById('status').innerHTML = '✅ Verified! Approving...';
-        tg.sendData(JSON.stringify({action: 'human_verified', chat_id: chatId}));
-        setTimeout(() => tg.close(), 1500);
-    }
-
-    // Debug: Catch any SDK errors and show them on screen
-    window.addEventListener('error', (event) => {
-        console.error('Global error:', event.message, event.filename, event.lineno);
-        if (event.message.includes('sharering') || event.message.includes('qrcode')) {
-            document.getElementById('status').innerHTML = 
-                '<span style="color:red;">QR failed to load — check console or query config.</span>';
-        }
-    });
-
-    // Check after a few seconds if QR div is still empty
-    setTimeout(() => {
-        if (document.getElementById('qrcode').innerHTML.trim() === '') {
-            document.getElementById('status').innerHTML += 
-                '<br><span style="color:orange;">QR container empty — SDK init may have failed.</span>';
-        }
-    }, 5000);
-</script>
 </body>
 </html>
