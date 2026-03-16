@@ -1,4 +1,5 @@
 import logging, json, sqlite3
+import os
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
     WebAppInfo, LabeledPrice
@@ -13,8 +14,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────
-BOT_TOKEN    = "8437257336:AAG7okUlpQoa3QbVFCC5cf1gO5W9Rw2dDqc"
-MINI_APP_URL = "https://foremancrypto.github.io/human-mini-app"
+
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://foremancrypto.github.io/human-mini-app")
 
 ENABLE_SETUP_FEE = False
 SETUP_FEE_STARS  = 299
