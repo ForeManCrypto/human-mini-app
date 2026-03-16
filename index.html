@@ -1,47 +1,33 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Proof of Human</title>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    
-    <script src="sharering.query.lib.prod.min.js"></script>
+<script src="sharering.query.lib.prod.min.js"></script>
 
-    <style>
-        body { background: #111; color: white; text-align: center; padding: 50px; font-family: sans-serif; }
-        .qr-box { background: white; padding: 20px; width: 200px; height: 200px; margin: 20px auto; border-radius: 10px; }
-        #qrcode canvas { width: 100%; height: auto; }
-    </style>
-</head>
-<body>
+<script>
+    // 1. Define functions globally first
+    window.onInit = function(data) {
+        console.log('SDK initialized:', data);
+        document.getElementById('status').innerText = "✅ QR Ready - Scan now";
+    };
 
-    <h2>Scan to Verify</h2>
-    
-    <div class="sharering-query" 
-         queryId="69b75ef6169a014f92b5ca1e" 
-         qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
-         mode="static"
-         oninit="onInit">
-        <div class="qr-box"><div id="qrcode"></div></div>
-    </div>
+    window.onScan = function(data) {
+        console.log('Scan success:', data);
+        document.getElementById('status').innerText = "✅ Verified!";
+    };
 
-    <p id="status">Loading...</p>
+    // 2. Set Global Config
+    window.ShareRingLink = {
+        baseUrl: "https://api.sharering.link/v1",
+        mode: "static"
+    };
 
-    <script>
-        // These MUST be global so the SDK can see them
-        window.onInit = function(data) {
-            document.getElementById('status').innerText = "✅ QR Ready";
-        };
-
-        $(document).ready(function() {
-            setTimeout(() => {
-                if (window.ShareRingQuery) {
-                    window.ShareRingQuery.init();
-                } else {
-                    document.getElementById('status').innerText = "❌ Script file missing in repo!";
-                }
-            }, 1000);
-        });
-    </script>
-</body>
-</html>
+    $(document).ready(function() {
+        console.log("Page ready. Initializing local SDK...");
+        
+        setTimeout(() => {
+            // Check if YOUR local file loaded correctly
+            if (window.ShareRingQuery) {
+                window.ShareRingQuery.init();
+            } else {
+                document.getElementById('status').innerHTML = "<span style='color:red'>❌ Local SDK file missing! Check your GitHub repo.</span>";
+            }
+        }, 1500);
+    });
+</script>
