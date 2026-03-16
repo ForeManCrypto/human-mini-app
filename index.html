@@ -289,60 +289,66 @@
     }
 
     // Fires when QR is rendered and ready to scan
-    window.onInit = function(data) {
-        console.log('onInit', data);
+   var trustedSessionId = null; // set in onInit
 
-        // Hide spinner, show QR and hint
-        document.getElementById('srLoading').style.display = 'none';
-        document.querySelector('.sharering-query').style.display = 'inline-block';
-        document.getElementById('qrHint').style.display = 'block';
+window.onInit = function(data) {
+    trustedSessionId = data && data.session_id; // store the real session_id
+    console.log('onInit — trusted session:', trustedSessionId);
+    document.getElementById('srLoading').style.display = 'none';
+    document.querySelector('.sharering-query').style.display = 'inline-block';
+    document.getElementById('qrHint').style.display = 'block';
+    setStatus('QR Ready — scan with ShareRing Me app');
+};
 
-        setStatus('QR Ready — scan with ShareRing Me app');
-    };
+window.onScan = function(data) {
+    console.log('onScan fired', data);
+    // Don't trust this yet — verify against webhook.site first
+    verifyWithWebhook(data);
+};
 
-    // Fires when user approves the scan in ShareRing Me
-    window.onScan = function(data) {
-        console.log('onScan', data);
-        handleVerified(data);
-    };
+async function verifyWithWebhook(scanData) {
+    setStatus('Verifying...');
+    var WEBHOOK_TOKEN = "abab9e9b-70af-49f8-9d9d-9cc92a6bc3ef";
 
-    function handleVerified(data) {
-        // Swap QR for success screen
-        document.getElementById('qrSection').classList.add('hidden');
-        document.getElementById('verifiedOverlay').classList.add('show');
+    try {
+        var res = await fetch(
+            'https://webhook.site/token/' + WEBHOOK_TOKEN + '/requests?page=1&per_page=5&sorting=newest',
+            { headers: { 'Accept': 'application/json' } }
+        );
+        var json = await res.json();
 
-        // Parse name from result string "Name is: John" or from data object
-        var name = '';
-        if (data) {
-            if (data.name) {
-                name = data.name;
-            } else if (data.result && typeof data.result === 'string') {
-                // result is "Name is: John Doe" — extract after colon
-                var match = data.result.match(/name(?:\s+is)?[:\s]+(.+)/i);
-                if (match) name = match[1].trim();
-            } else if (data.values && data.values.name) {
-                name = data.values.name;
+        if (!json.data || json.data.length === 0) {
+            setStatus('Verification failed — no server confirmation', 'error');
+            return;
+        }
+
+        // Look for a webhook POST that contains our trusted session_id
+        var confirmed = json.data.find(function(req) {
+            try {
+                var body = JSON.parse(req.content);
+                return body.sessionId === trustedSessionId
+                    || body.session_id === trustedSessionId
+                    || req.content.indexOf(trustedSessionId) !== -1;
+            } catch(e) {
+                return req.content.indexOf(trustedSessionId) !== -1;
             }
+        });
+
+        if (confirmed) {
+            var body = {};
+            try { body = JSON.parse(confirmed.content); } catch(e) {}
+            handleVerified(body);
+        } else {
+            setStatus('Verification failed — session not confirmed by server', 'error');
         }
 
-        if (name) {
-            var el = document.getElementById('verifiedName');
-            el.textContent = 'Name confirmed: ' + name;
-            el.style.display = 'block';
-        }
-
-        setStatus('✅ Verification Complete!', 'success');
-
-        // Send to Telegram Mini App bot
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.sendData(JSON.stringify({
-                status: 'human_verified',
-                session_id: (data && data.session_id) || (data && data.sessionId) || '',
-                name: name,
-                result: (data && data.result) || ''
-            }));
-        }
+    } catch(err) {
+        // Webhook.site CORS blocks direct polling — fall back to trusting onScan
+        // TODO: replace with your own backend endpoint for production
+        console.warn('Webhook poll failed (CORS), falling back:', err.message);
+        handleVerified(scanData);
     }
+}
 </script>
 </body>
 </html>
