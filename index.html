@@ -6,56 +6,51 @@
     <title>Proof of Human</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.qrcode/1.0/jquery.qrcode.min.js"></script>
-    
     <script src="https://raw.githack.com/ShareRing/shareringlink-javascript-library/master/sharering.query.lib.prod.min.js" crossorigin="anonymous"></script> 
     
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
 
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background:#0f0f0f; color:#fff; text-align:center; padding:40px 20px; margin:0; }
+        body { font-family: 'Roboto', sans-serif; background:#0f0f0f; color:#fff; text-align:center; padding:40px 20px; margin:0; }
+        .container { max-width: 400px; margin: 0 auto; }
         h1 { font-size: 24px; margin-bottom: 10px; }
         p { color: #aaa; font-size: 16px; margin-bottom: 30px; }
         
-        /* Layout for the QR container */
         .qrcode-content {
             margin: 0 auto;
-            width: 150px; /* Controlled size */
-            height: 150px;
+            width: 160px; 
+            height: 160px;
             background: #fff;
-            padding: 10px;
+            padding: 12px;
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
-        /* Forcing the SDK generated canvas to fit our 150px box */
         #qrcode canvas, #qrcode img {
             width: 100% !important;
             height: auto !important;
-            display: block;
         }
 
         #status { margin-top: 30px; font-size: 16px; color: #00ff88; min-height: 50px; }
-        .error { color: #ff5555; font-weight: bold; }
-        .warning { color: #ffaa00; font-size: 14px; }
+        .error { color: #ff5555; }
     </style>
 </head>
 <body>
 
-    <h1>Prove You Are Human</h1>
-    <p>Scan with <b>ShareRing Me</b> app.<br>Biometric check — privacy-first.</p>
+<div class="container">
+    <h1>Are you human?</h1>
+    <p>Please use the <b>ShareRing Me</b> app to scan this QR code.</p>
     
     <div class="sharering-query" 
-         queryId="69964833c65d9f316f5ea3dd" 
+         queryId="69b75ef6169a014f92b5ca1e" 
          mode="static" 
          qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
-         app="ShareRing Me" 
          oninit="onInit" 
          onscan="onScan">
         <div class="qrcode-content">
@@ -63,55 +58,57 @@
         </div>
     </div>
 
-    <div id="status">Loading secure QR code...</div>
+    <div id="status">Establishing secure connection...</div>
+</div>
 
-    <script>
-        const tg = window.Telegram.WebApp;
+<script>
+    const tg = window.Telegram.WebApp;
+
+    // 1. Set Global Config to bypass auto-analysis errors
+    window.ShareRingLink = {
+        baseUrl: "https://api.sharering.link/v1",
+        mode: "static"
+    };
+
+    $(document).ready(function() {
+        tg.ready();
+        tg.expand();
         
-        $(document).ready(function() {
-            tg.ready();
-            tg.expand();
-            console.log("App ready. Chat ID Check...");
-        });
-
-        const urlParams = new URLSearchParams(location.search);
-        const chatId = urlParams.get('chat_id') || 'unknown';
-
-        // ShareRing SDK Callbacks
-        function onInit(data) {
-            console.log('ShareRing SDK Initialized:', data);
-            document.getElementById('status').textContent = '✅ QR ready — scan now';
-        }
-
-        function onScan(data) {
-            console.log('Scan Success Data:', data);
-            document.getElementById('status').innerHTML = '✅ Human verified!<br>Returning to Telegram...';
-            
-            // Send verified status back to your Bot
-            tg.sendData(JSON.stringify({
-                action: 'human_verified', 
-                chat_id: chatId,
-                timestamp: new Date().toISOString()
-            }));
-
-            setTimeout(() => tg.close(), 2000);
-        }
-
-        // Error Handling
-        window.addEventListener('error', (event) => {
-            console.error('Captured Error:', event.message);
-            if (event.message.includes('analyze')) {
-                document.getElementById('status').innerHTML = '<span class="error">Analysis Error. Please check Dashboard Mode (Basic/Advanced).</span>';
-            }
-        });
-
-        // Fail-safe check if QR doesn't load
+        // 2. Manual Kickstart
+        // We wait 1 second to ensure all scripts are "painted" in the browser
         setTimeout(() => {
-            const qrDiv = document.getElementById('qrcode');
-            if (qrDiv.innerHTML.trim() === '') {
-                document.getElementById('status').innerHTML += '<br><span class="warning">Still loading? Check your internet or Dashboard Query status.</span>';
+            if (window.ShareRingQuery) {
+                console.log("Attempting manual SDK initialization...");
+                try {
+                    window.ShareRingQuery.init();
+                } catch (err) {
+                    console.error("Init error:", err);
+                    document.getElementById('status').innerHTML = '<span class="error">Analysis Error. Check Dashboard Attributes.</span>';
+                }
+            } else {
+                console.error("ShareRing SDK not found!");
             }
-        }, 10000);
-    </script>
+        }, 1000);
+    });
+
+    function onInit(data) {
+        console.log('SDK Ready:', data);
+        document.getElementById('status').textContent = '✅ QR Generated';
+    }
+
+    function onScan(data) {
+        console.log('Scan Success:', data);
+        document.getElementById('status').innerHTML = '✅ Verified!<br>Returning to Telegram...';
+        
+        // Pass the verify action back to your bot
+        tg.sendData(JSON.stringify({
+            action: 'human_verified',
+            queryId: "69b75ef6169a014f92b5ca1e"
+        }));
+
+        setTimeout(() => tg.close(), 2000);
+    }
+</script>
+
 </body>
 </html>
