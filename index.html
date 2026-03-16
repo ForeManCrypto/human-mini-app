@@ -44,16 +44,16 @@
     <h1>Prove You Are Human</h1>
     <p>Scan with <b>ShareRing Me</b> app.<br>Biometric check — privacy-first.</p>
     
-<div class="sharering-query"
-     queryId="69b75ef6169a014f92b5ca1e"
-     qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq"
-     mode="basic"
-     version="2" 
-     oninit="onInit"
+<div class="sharering-query" 
+     queryId="69b75ef6169a014f92b5ca1e" 
+     mode="dynamic" 
+     qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
+     app="ShareRing Me" 
+     oninit="onInit" 
      onscan="onScan">
-    <div id="qrcode"></div> 
+ <div class="qrcode-content">
+   <div id="qrcode"></div> </div>
 </div>
-    <div id="status">Loading QR code...</div>
 
     <script>
         // Fix jQuery noConflict if needed (helps in some environments)
