@@ -5,11 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Proof of Human</title>
     
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
-<script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/jquery.qrcode.min.js"></script>
-
-<script src="sharering.query.lib.prod.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/jquery.qrcode.min.js"></script>
+    <!-- FIX 1: Use CDN instead of local file -->
+    <script src="https://raw.githack.com/ShareRing/shareringlink-javascript-library/master/sharering.query.lib.prod.min.js" crossorigin="anonymous"></script>
 
     <style>
         body { font-family: sans-serif; background: #0f0f0f; color: white; text-align: center; padding: 50px 20px; margin: 0; }
@@ -32,55 +31,41 @@
 
     <h2>Verify Humanity</h2>
     
+    <!-- FIX 2: Added onscan, FIX 3: mode="dynamic" -->
     <div class="sharering-query" 
-     queryId="69b75ef6169a014f92b5ca1e" 
-     qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
-     mode="static"
-     oninit="onInit">
-    <div class="qr-card">
-        <div id="qrcode"></div>
+         queryId="69b75ef6169a014f92b5ca1e" 
+         qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq" 
+         mode="dynamic"
+         oninit="onInit"
+         onscan="onScan">
+        <div class="qr-card">
+            <div id="qrcode"></div>
+        </div>
     </div>
-</div>
 
     <div id="status">Syncing local SDK...</div>
 
     <script>
- // 1. Define the success callback
-window.onInit = function(data) {
-    console.log("SDK Initialized!", data);
-    // Hide the 'Syncing' text and show a real instruction
-    document.getElementById('status').innerHTML = "✅ QR Code Ready<br><small>Scan with ShareRing Me app</small>";
-};
+        // FIX 4: Removed the non-standard window.ShareRingLink config block
 
-// 2. Define the callback for when they actually scan
-window.onScan = function(data) {
-    console.log("SUCCESS! User verified:", data);
-    document.getElementById('status').innerHTML = "<h3 style='color:#00ff88'>✅ Verification Complete!</h3>";
-    
-    // This is where you'll tell Telegram the user is good to go
-    if (window.Telegram && window.Telegram.WebApp) {
-        window.Telegram.WebApp.sendData(JSON.stringify({
-            status: "human_verified",
-            session: data.session_id
-        }));
-    }
-};
+        window.onInit = function(data) {
+            console.log("SDK Initialized!", data);
+            document.getElementById('status').innerHTML = "✅ QR Code Ready<br><small>Scan with ShareRing Me app</small>";
+        };
 
-window.ShareRingLink = {
-    baseUrl: "https://api.sharering.link/v1",
-    mode: "static"
-};
+        window.onScan = function(data) {
+            console.log("SUCCESS! User verified:", data);
+            document.getElementById('status').innerHTML = "<h3 style='color:#00ff88'>✅ Verification Complete!</h3>";
+            
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.sendData(JSON.stringify({
+                    status: "human_verified",
+                    session: data.session_id
+                }));
+            }
+        };
 
-$(document).ready(function() {
-    // Only show an error if the script actually fails to load after 3 seconds
-    setTimeout(() => {
-        if (window.ShareRingQuery) {
-            window.ShareRingQuery.init();
-        } else {
-            document.getElementById('status').innerHTML = "<span style='color:red'>❌ Error: SDK Library failed to load.</span>";
-        }
-    }, 1000);
-});
+        // FIX 5: Removed unnecessary manual init — library auto-initializes
     </script>
 </body>
 </html>
