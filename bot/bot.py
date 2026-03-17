@@ -199,6 +199,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
 
 async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req     = update.chat_join_request
+    logger.info(f"JOIN REQUEST received from user {req.from_user.id} for chat {req.chat.id}")  # ADD THIS
     chat_id = req.chat.id
     user_id = req.from_user.id
 
