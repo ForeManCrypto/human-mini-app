@@ -3,249 +3,344 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Proof of Human</title>
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+    <title>Proof of Human — ShareRing</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #080b10;
-            --surface: #0f1520;
-            --border: #1c2a3a;
-            --accent: #00e5ff;
-            --accent2: #00ff88;
-            --danger: #ff4455;
-            --text: #e0eaf5;
-            --muted: #4a6070;
-            --glow: 0 0 24px rgba(0,229,255,0.18);
+            --navy:       #0A1628;
+            --navy-light: #1A2E4A;
+            --navy-card:  rgba(26,46,74,0.8);
+            --teal:       #00D4AA;
+            --teal-dim:   rgba(0,212,170,0.12);
+            --teal-border:rgba(0,212,170,0.25);
+            --white:      #FFFFFF;
+            --gray:       #8892A4;
+            --gray-light: #B8C4D0;
+            --success:    #00E676;
+            --danger:     #FF4757;
+            --glow-teal:  0 0 32px rgba(0,212,170,0.2);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Syne', sans-serif;
+            background: var(--navy);
+            color: var(--white);
+            font-family: 'DM Sans', -apple-system, sans-serif;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-start;
-            padding: 40px 20px 60px;
-            overflow-x: hidden;
+            justify-content: center;
+            padding: 32px 20px 48px;
+            position: relative;
+            overflow: hidden;
         }
 
+        /* ShareRing-style radial background glow */
         body::before {
             content: '';
             position: fixed;
-            inset: 0;
-            background-image:
-                linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
-            background-size: 40px 40px;
+            top: -20%;
+            left: -20%;
+            width: 60%;
+            height: 60%;
+            background: radial-gradient(ellipse, rgba(0,212,170,0.07) 0%, transparent 70%);
             pointer-events: none;
-            z-index: 0;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            bottom: -20%;
+            right: -20%;
+            width: 60%;
+            height: 60%;
+            background: radial-gradient(ellipse, rgba(0,180,148,0.05) 0%, transparent 70%);
+            pointer-events: none;
         }
 
         .container {
             position: relative;
             z-index: 1;
             width: 100%;
-            max-width: 420px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 24px;
-        }
-
-        .header { text-align: center; animation: fadeDown 0.6s ease both; }
-
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(0,229,255,0.08);
-            border: 1px solid rgba(0,229,255,0.2);
-            border-radius: 20px;
-            padding: 4px 14px;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 11px;
-            color: var(--accent);
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            margin-bottom: 14px;
-        }
-
-        .badge::before {
-            content: '';
-            width: 6px; height: 6px;
-            background: var(--accent);
-            border-radius: 50%;
-            animation: pulse 1.5s infinite;
-        }
-
-        h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
-        h1 span { color: var(--accent); }
-        .subtitle { margin-top: 8px; font-size: 13px; color: var(--muted); font-weight: 400; }
-
-        .qr-wrapper {
-            width: 100%;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 28px;
+            max-width: 400px;
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 20px;
-            animation: fadeUp 0.6s 0.1s ease both;
+        }
+
+        /* Logo + header */
+        .header {
+            text-align: center;
+            animation: fadeDown 0.5s ease both;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--teal);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--white);
+            letter-spacing: -0.02em;
+        }
+
+        .logo-text span {
+            color: var(--teal);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--gray);
+            line-height: 1.5;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+
+        /* Main card */
+        .card {
+            width: 100%;
+            background: var(--navy-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--teal-border);
+            border-radius: 20px;
+            padding: 28px 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            animation: fadeUp 0.5s 0.1s ease both;
             position: relative;
             overflow: hidden;
         }
 
-        .qr-wrapper::before {
+        /* Top teal line like ShareRing cards */
+        .card::before {
             content: '';
             position: absolute;
             top: 0; left: 0; right: 0;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--accent), transparent);
-            opacity: 0.6;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--teal), transparent);
         }
 
+        /* Loading state */
         .sr-loading {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 12px;
-            color: var(--muted);
-            font-family: 'Share Tech Mono', monospace;
+            gap: 10px;
+            padding: 20px 0;
+            color: var(--gray);
             font-size: 13px;
         }
 
         .sr-spinner {
-            width: 36px; height: 36px;
-            border: 3px solid rgba(0,229,255,0.15);
-            border-top-color: var(--accent);
+            width: 32px; height: 32px;
+            border: 2.5px solid rgba(0,212,170,0.2);
+            border-top-color: var(--teal);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
 
+        /* QR section */
         .qr-section { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
         .qr-section.hidden { display: none; }
         .sharering-query { display: none; }
 
+        .qr-frame {
+            position: relative;
+            padding: 4px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--teal), rgba(0,212,170,0.3));
+        }
+
         .qr-card {
             background: white;
-            padding: 16px;
-            border-radius: 12px;
-            width: 200px;
-            height: 200px;
+            padding: 14px;
+            border-radius: 13px;
+            width: 192px;
+            height: 192px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: var(--glow);
             position: relative;
             overflow: hidden;
         }
-
-        .qr-card::before,
-        .qr-card::after {
-            content: '';
-            position: absolute;
-            width: 20px; height: 20px;
-            border-color: var(--accent);
-            border-style: solid;
-            opacity: 0.7;
-            z-index: 2;
-        }
-        .qr-card::before { top: -4px; left: -4px; border-width: 2px 0 0 2px; border-radius: 3px 0 0 0; }
-        .qr-card::after  { bottom: -4px; right: -4px; border-width: 0 2px 2px 0; border-radius: 0 0 3px 0; }
 
         #qrcode canvas { width: 100% !important; height: auto !important; }
 
         .scan-anim {
             position: absolute;
             left: 0; right: 0; height: 2px;
-            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            background: linear-gradient(90deg, transparent, var(--teal), transparent);
             top: 0;
             animation: scanLine 2s linear infinite;
             pointer-events: none;
-            z-index: 1;
         }
 
         .qr-hint {
-            font-family: 'Share Tech Mono', monospace;
             font-size: 12px;
-            color: var(--muted);
+            color: var(--gray);
             text-align: center;
+            font-family: 'DM Mono', monospace;
+            letter-spacing: 0.03em;
         }
 
-        /* Verified overlay */
+        /* Trust badges */
+        .trust-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .trust-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(0,212,170,0.08);
+            border: 1px solid rgba(0,212,170,0.15);
+            border-radius: 20px;
+            padding: 4px 10px;
+            font-size: 11px;
+            color: var(--teal);
+            font-weight: 500;
+        }
+
+        /* Verified state */
         .verified-overlay {
             display: none;
             flex-direction: column;
             align-items: center;
-            gap: 12px;
-            padding: 10px 0;
+            gap: 14px;
+            padding: 16px 0 8px;
             width: 100%;
+            text-align: center;
         }
         .verified-overlay.show { display: flex; }
-        .checkmark { font-size: 56px; animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both; }
-        .verified-text { font-size: 22px; font-weight: 800; color: var(--accent2); }
-        .verified-profile {
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 13px; color: var(--accent);
-            background: rgba(0,229,255,0.06);
-            border: 1px solid rgba(0,229,255,0.15);
-            border-radius: 8px; padding: 8px 16px;
-        }
-        .verified-sub {
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 12px; color: var(--muted); text-align: center;
+
+        .verified-icon {
+            width: 72px; height: 72px;
+            background: rgba(0,230,118,0.1);
+            border: 2px solid rgba(0,230,118,0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
         }
 
-        /* Retry button */
-        .retry-btn {
-            display: none;
-            background: rgba(255,68,85,0.1);
-            border: 1px solid rgba(255,68,85,0.3);
-            color: var(--danger);
-            font-family: 'Syne', sans-serif;
-            font-size: 14px;
+        .verified-title {
+            font-size: 20px;
             font-weight: 700;
-            padding: 12px 24px;
-            border-radius: 10px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 8px;
-            transition: background 0.2s;
+            color: var(--success);
+            letter-spacing: -0.02em;
         }
-        .retry-btn:hover { background: rgba(255,68,85,0.2); }
-        .retry-btn.show { display: block; }
+
+        .verified-profile {
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            color: var(--teal);
+            background: var(--teal-dim);
+            border: 1px solid var(--teal-border);
+            border-radius: 8px;
+            padding: 7px 16px;
+        }
+
+        .verified-sub {
+            font-size: 13px;
+            color: var(--gray);
+            line-height: 1.5;
+        }
 
         /* Status bar */
         #status {
             width: 100%;
-            background: var(--surface);
-            border: 1px solid var(--border);
+            background: var(--navy-card);
+            border: 1px solid rgba(255,255,255,0.08);
             border-radius: 12px;
-            padding: 14px 18px;
-            display: flex; align-items: center; gap: 10px;
-            font-size: 14px; font-weight: 700; color: var(--accent);
-            animation: fadeUp 0.6s 0.2s ease both;
-            transition: all 0.4s ease;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--teal);
+            animation: fadeUp 0.5s 0.2s ease both;
+            transition: all 0.3s ease;
         }
-        #status.success { border-color: rgba(0,255,136,0.3); color: var(--accent2); background: rgba(0,255,136,0.06); }
-        #status.error   { border-color: rgba(255,68,85,0.3);  color: var(--danger);  background: rgba(255,68,85,0.06); }
+        #status.success { border-color: rgba(0,230,118,0.25); color: var(--success); background: rgba(0,230,118,0.06); }
+        #status.error   { border-color: rgba(255,71,87,0.25);  color: var(--danger);  background: rgba(255,71,87,0.06); }
 
         .status-dot {
-            width: 8px; height: 8px; border-radius: 50%;
+            width: 7px; height: 7px; border-radius: 50%;
             background: currentColor; flex-shrink: 0;
             animation: pulse 1.5s infinite;
         }
         #status.success .status-dot,
         #status.error   .status-dot { animation: none; }
 
-        @keyframes fadeDown { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes fadeUp   { from { opacity:0; transform:translateY(16px);  } to { opacity:1; transform:translateY(0); } }
+        /* Retry button */
+        .retry-btn {
+            display: none;
+            width: 100%;
+            background: rgba(255,71,87,0.08);
+            border: 1px solid rgba(255,71,87,0.25);
+            color: var(--danger);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 12px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .retry-btn:hover { background: rgba(255,71,87,0.15); }
+        .retry-btn.show { display: block; }
+
+        /* Footer */
+        .footer {
+            font-size: 11px;
+            color: var(--gray);
+            text-align: center;
+            animation: fadeUp 0.5s 0.3s ease both;
+        }
+
+        .footer a {
+            color: var(--teal);
+            text-decoration: none;
+        }
+
+        @keyframes fadeDown { from { opacity:0; transform:translateY(-12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeUp   { from { opacity:0; transform:translateY(12px);  } to { opacity:1; transform:translateY(0); } }
         @keyframes pulse    { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
         @keyframes popIn    { from { transform:scale(0); opacity:0; } to { transform:scale(1); opacity:1; } }
         @keyframes scanLine { 0% { top:-2px; } 100% { top:100%; } }
@@ -255,19 +350,27 @@
 <body>
 <div class="container">
 
+    <!-- Header -->
     <div class="header">
-        <div class="badge">ShareRing Link</div>
-        <h1>Proof of <span>Human</span></h1>
-        <p class="subtitle">Scan the QR code with ShareRing Me to verify your identity</p>
+        <div class="logo">
+            <div class="logo-icon">🔐</div>
+            <div class="logo-text">Share<span>Ring</span></div>
+        </div>
+        <h1>Proof of Human</h1>
+        <p class="subtitle">Scan the QR code with ShareRing Me to verify your identity and join the community.</p>
     </div>
 
-    <div class="qr-wrapper">
-        <div class="qr-section" id="qrSection">
-            <div class="sr-loading" id="srLoading">
-                <div class="sr-spinner"></div>
-                <span>Generating QR code...</span>
-            </div>
+    <!-- Main card -->
+    <div class="card">
 
+        <!-- Loading -->
+        <div class="sr-loading" id="srLoading">
+            <div class="sr-spinner"></div>
+            <span>Generating secure QR code...</span>
+        </div>
+
+        <!-- QR section -->
+        <div class="qr-section" id="qrSection">
             <div class="sharering-query"
                  queryId="69b75ef6169a014f92b5ca1e,basic"
                  qrcodeOwner="shareledger19u6mslpgnuepay8yyxq0f0tadnm7pmwdv0cysq"
@@ -275,32 +378,48 @@
                  app="ShareRing Me"
                  oninit="onInit"
                  onscan="onScan">
-                <div class="qr-card">
-                    <div class="scan-anim"></div>
-                    <div id="qrcode"></div>
+                <div class="qr-frame">
+                    <div class="qr-card">
+                        <div class="scan-anim"></div>
+                        <div id="qrcode"></div>
+                    </div>
                 </div>
             </div>
-
             <p class="qr-hint" id="qrHint" style="display:none">Open ShareRing Me → Scan → Approve</p>
+
+            <!-- Trust badges -->
+            <div class="trust-row">
+                <div class="trust-badge">🔒 Zero data stored</div>
+                <div class="trust-badge">🌐 190+ countries</div>
+                <div class="trust-badge">✓ ISO 27001</div>
+            </div>
         </div>
 
+        <!-- Verified state -->
         <div class="verified-overlay" id="verifiedOverlay">
-            <div class="checkmark">✅</div>
-            <div class="verified-text">Human Verified</div>
+            <div class="verified-icon">✅</div>
+            <div class="verified-title">Identity Verified</div>
             <div class="verified-profile" id="verifiedProfile" style="display:none"></div>
-            <div class="verified-sub">Your join request has been approved.<br>Return to Telegram to enter the group.</div>
+            <div class="verified-sub">Your join request has been approved.<br>Returning you to the group...</div>
         </div>
+
     </div>
 
+    <!-- Status -->
     <div id="status">
         <div class="status-dot"></div>
-        <span id="statusText">Loading SDK...</span>
+        <span id="statusText">Initialising secure session...</span>
     </div>
 
-    <!-- Retry button — shown only on timeout -->
+    <!-- Retry -->
     <button class="retry-btn" id="retryBtn" onclick="retryVerification()">
-        🔄 Verification timed out — tap to retry
+        🔄 Timed out — tap to retry
     </button>
+
+    <!-- Footer -->
+    <div class="footer">
+        Powered by <a href="https://sharering.network" target="_blank">ShareRing Link</a> · Zero-knowledge identity verification
+    </div>
 
 </div>
 
@@ -317,14 +436,13 @@
     var trustedSessionId = null;
     var pollHandle       = null;
     var pollCount        = 0;
-    var maxPolls         = 40; // 40 × 1.5s = 60 seconds
+    var maxPolls         = 40; // 60 seconds
 
     function setStatus(msg, type) {
         document.getElementById('status').className = type || '';
         document.getElementById('statusText').textContent = msg;
     }
 
-    // ── onInit: QR ready — register session with Worker ──────────
     window.onInit = function(data) {
         console.log('onInit', data);
         trustedSessionId = data && (data.session_id || data.sessionId);
@@ -332,9 +450,8 @@
         document.getElementById('srLoading').style.display = 'none';
         document.querySelector('.sharering-query').style.display = 'inline-block';
         document.getElementById('qrHint').style.display = 'block';
-        setStatus('QR Ready — scan with ShareRing Me app');
+        setStatus('QR Ready — scan with ShareRing Me');
 
-        // Register session so Worker knows which user/chat to approve
         if (trustedSessionId) {
             fetch(WORKER_URL + '/session', {
                 method: 'POST',
@@ -344,15 +461,10 @@
                     user_id: userId,
                     chat_id: chatId
                 })
-            }).then(function(r) {
-                console.log('Session registered:', r.status);
-            }).catch(function(e) {
-                console.warn('Session register error:', e);
-            });
+            }).catch(function(e) { console.warn('Session register error:', e); });
         }
     };
 
-    // ── onScan: ShareRing app confirmed — start polling Worker ────
     window.onScan = function(data) {
         console.log('onScan fired', data);
         setStatus('Verifying with server...');
@@ -360,13 +472,11 @@
         pollHandle = setInterval(doPoll, 1500);
     };
 
-    // ── Poll Worker for server-side confirmation ──────────────────
     async function doPoll() {
         pollCount++;
 
         if (pollCount > maxPolls) {
             clearInterval(pollHandle);
-            // Verification timed out — show error and retry button
             setStatus('Verification timed out — please try again', 'error');
             document.getElementById('retryBtn').classList.add('show');
             return;
@@ -381,7 +491,6 @@
         try {
             var res  = await fetch(WORKER_URL + '/check?session=' + trustedSessionId);
             var json = await res.json();
-            console.log('Poll result:', json);
 
             if (json.verified) {
                 clearInterval(pollHandle);
@@ -394,40 +503,39 @@
         }
     }
 
-    // ── Retry — reload the page fresh ────────────────────────────
     function retryVerification() {
         window.location.reload();
     }
 
-    // ── Verified — show green screen ──────────────────────────────
-   function handleVerified(data) {
-    document.getElementById('qrSection').classList.add('hidden');
-    document.getElementById('verifiedOverlay').classList.add('show');
-    document.getElementById('retryBtn').classList.remove('show');
+    function handleVerified(data) {
+        document.getElementById('srLoading').style.display = 'none';
+        document.getElementById('qrSection').classList.add('hidden');
+        document.getElementById('verifiedOverlay').classList.add('show');
+        document.getElementById('retryBtn').classList.remove('show');
 
-    var profile = (data.values && data.values.personal_social_profile)
-               || (data.result && data.result.trim())
-               || '';
+        var profile = (data.values && data.values.personal_social_profile)
+                   || (data.result && data.result.trim())
+                   || '';
 
-    if (profile) {
-        var el = document.getElementById('verifiedProfile');
-        el.textContent = '@ ' + profile;
-        el.style.display = 'block';
-    }
-
-    setStatus('✅ Verified! Taking you to the group...', 'success');
-
-    setTimeout(function() {
-        if (window.Telegram && window.Telegram.WebApp) {
-            // Open the group directly then close the mini app
-            window.Telegram.WebApp.openTelegramLink(
-                'tg://openmessage?chat_id=' + chatId.replace('-100', '')
-            );
-            window.Telegram.WebApp.close();
+        if (profile) {
+            var el = document.getElementById('verifiedProfile');
+            el.textContent = '@ ' + profile;
+            el.style.display = 'block';
         }
-    }, 2000);
-}
 
+        setStatus('✅ Identity verified — welcome!', 'success');
+
+        // Return user to the group after 2 seconds
+        setTimeout(function() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                var groupId = chatId.replace('-100', '');
+                window.Telegram.WebApp.openTelegramLink(
+                    'tg://openmessage?chat_id=' + groupId
+                );
+                window.Telegram.WebApp.close();
+            }
+        }, 2000);
+    }
 </script>
 </body>
 </html>
