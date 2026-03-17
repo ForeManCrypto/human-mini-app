@@ -400,7 +400,7 @@
     }
 
     // ── Verified — show green screen ──────────────────────────────
-    function handleVerified(data) {
+   function handleVerified(data) {
     document.getElementById('qrSection').classList.add('hidden');
     document.getElementById('verifiedOverlay').classList.add('show');
     document.getElementById('retryBtn').classList.remove('show');
@@ -415,14 +415,17 @@
         el.style.display = 'block';
     }
 
-    setStatus('✅ Verified! Returning to Telegram...', 'success');
+    setStatus('✅ Verified! Taking you to the group...', 'success');
 
-    // Show success briefly then close — returns user to the bot
     setTimeout(function() {
         if (window.Telegram && window.Telegram.WebApp) {
+            // Open the group directly then close the mini app
+            window.Telegram.WebApp.openTelegramLink(
+                'tg://openmessage?chat_id=' + chatId.replace('-100', '')
+            );
             window.Telegram.WebApp.close();
         }
-    }, 2000); // 2 second delay so user sees the green screen
+    }, 2000);
 }
 
 </script>
