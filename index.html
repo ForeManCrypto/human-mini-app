@@ -178,6 +178,7 @@
             text-align: center;
         }
 
+        /* Verified overlay */
         .verified-overlay {
             display: none;
             flex-direction: column;
@@ -196,8 +197,31 @@
             border: 1px solid rgba(0,229,255,0.15);
             border-radius: 8px; padding: 8px 16px;
         }
-        .verified-sub { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--muted); text-align: center; }
+        .verified-sub {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px; color: var(--muted); text-align: center;
+        }
 
+        /* Retry button */
+        .retry-btn {
+            display: none;
+            background: rgba(255,68,85,0.1);
+            border: 1px solid rgba(255,68,85,0.3);
+            color: var(--danger);
+            font-family: 'Syne', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 8px;
+            transition: background 0.2s;
+        }
+        .retry-btn:hover { background: rgba(255,68,85,0.2); }
+        .retry-btn.show { display: block; }
+
+        /* Status bar */
         #status {
             width: 100%;
             background: var(--surface);
@@ -264,7 +288,7 @@
             <div class="checkmark">✅</div>
             <div class="verified-text">Human Verified</div>
             <div class="verified-profile" id="verifiedProfile" style="display:none"></div>
-            <div class="verified-sub" id="verifiedSub">Approving your join request...</div>
+            <div class="verified-sub">Your join request has been approved.<br>Return to Telegram to enter the group.</div>
         </div>
     </div>
 
@@ -272,6 +296,11 @@
         <div class="status-dot"></div>
         <span id="statusText">Loading SDK...</span>
     </div>
+
+    <!-- Retry button — shown only on timeout -->
+    <button class="retry-btn" id="retryBtn" onclick="retryVerification()">
+        🔄 Verification timed out — tap to retry
+    </button>
 
 </div>
 
@@ -281,24 +310,21 @@
 <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/sharering.query.lib.prod.min.js"></script>
 
 <script>
-    // ── Config ────────────────────────────────────────────────────
-    var WORKER_URL = 'https://human-bot-worker.moneyforeman.workers.dev';
-
-    // ── Read URL params passed by the bot ─────────────────────────
+    var WORKER_URL       = 'https://human-bot-worker.moneyforeman.workers.dev';
     var urlParams        = new URLSearchParams(window.location.search);
     var chatId           = urlParams.get('chat_id') || '';
     var userId           = urlParams.get('user_id') || '';
     var trustedSessionId = null;
     var pollHandle       = null;
     var pollCount        = 0;
-    var maxPolls         = 30;
+    var maxPolls         = 40; // 40 × 1.5s = 60 seconds
 
     function setStatus(msg, type) {
         document.getElementById('status').className = type || '';
         document.getElementById('statusText').textContent = msg;
     }
 
-    // ── onInit: QR is ready — register session with Worker ────────
+    // ── onInit: QR ready — register session with Worker ──────────
     window.onInit = function(data) {
         console.log('onInit', data);
         trustedSessionId = data && (data.session_id || data.sessionId);
@@ -309,7 +335,7 @@
         setStatus('QR Ready — scan with ShareRing Me app');
 
         // Register session so Worker knows which user/chat to approve
-        if (trustedSessionId && userId && chatId) {
+        if (trustedSessionId) {
             fetch(WORKER_URL + '/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -318,11 +344,15 @@
                     user_id: userId,
                     chat_id: chatId
                 })
-            }).catch(function(e) { console.warn('Session register error:', e); });
+            }).then(function(r) {
+                console.log('Session registered:', r.status);
+            }).catch(function(e) {
+                console.warn('Session register error:', e);
+            });
         }
     };
 
-    // ── onScan: ShareRing confirmed — poll Worker ─────────────────
+    // ── onScan: ShareRing app confirmed — start polling Worker ────
     window.onScan = function(data) {
         console.log('onScan fired', data);
         setStatus('Verifying with server...');
@@ -330,20 +360,21 @@
         pollHandle = setInterval(doPoll, 1500);
     };
 
-    // ── Poll Worker until it confirms ShareRing POSTed ────────────
+    // ── Poll Worker for server-side confirmation ──────────────────
     async function doPoll() {
         pollCount++;
 
-       if (pollCount > maxPolls) {
-    clearInterval(pollHandle);
-    // Show success anyway — Worker likely already approved them
-    handleVerified({});
-    return;
-}
+        if (pollCount > maxPolls) {
+            clearInterval(pollHandle);
+            // Verification timed out — show error and retry button
+            setStatus('Verification timed out — please try again', 'error');
+            document.getElementById('retryBtn').classList.add('show');
+            return;
+        }
 
         if (!trustedSessionId) {
             clearInterval(pollHandle);
-            setStatus('Session error — please refresh', 'error');
+            setStatus('Session error — please close and try again', 'error');
             return;
         }
 
@@ -363,10 +394,16 @@
         }
     }
 
+    // ── Retry — reload the page fresh ────────────────────────────
+    function retryVerification() {
+        window.location.reload();
+    }
+
     // ── Verified — show green screen ──────────────────────────────
     function handleVerified(data) {
         document.getElementById('qrSection').classList.add('hidden');
         document.getElementById('verifiedOverlay').classList.add('show');
+        document.getElementById('retryBtn').classList.remove('show');
 
         var profile = (data.values && data.values.personal_social_profile)
                    || (data.result && data.result.trim())
@@ -378,18 +415,7 @@
             el.style.display = 'block';
         }
 
-        setStatus('✅ Verified! Join request approved.', 'success');
-        document.getElementById('verifiedSub').textContent = 'You can now close this and return to Telegram.';
-
-        // Worker already approved the join request directly via Telegram API
-        // sendData as fallback in case Worker approval failed
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.sendData(JSON.stringify({
-                action:  'human_verified',
-                chat_id: chatId,
-                profile: profile
-            }));
-        }
+        setStatus('✅ Verified! You can return to Telegram.', 'success');
     }
 </script>
 </body>
