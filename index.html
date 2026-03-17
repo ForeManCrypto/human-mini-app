@@ -401,22 +401,30 @@
 
     // ── Verified — show green screen ──────────────────────────────
     function handleVerified(data) {
-        document.getElementById('qrSection').classList.add('hidden');
-        document.getElementById('verifiedOverlay').classList.add('show');
-        document.getElementById('retryBtn').classList.remove('show');
+    document.getElementById('qrSection').classList.add('hidden');
+    document.getElementById('verifiedOverlay').classList.add('show');
+    document.getElementById('retryBtn').classList.remove('show');
 
-        var profile = (data.values && data.values.personal_social_profile)
-                   || (data.result && data.result.trim())
-                   || '';
+    var profile = (data.values && data.values.personal_social_profile)
+               || (data.result && data.result.trim())
+               || '';
 
-        if (profile) {
-            var el = document.getElementById('verifiedProfile');
-            el.textContent = '@ ' + profile;
-            el.style.display = 'block';
-        }
-
-        setStatus('✅ Verified! You can return to Telegram.', 'success');
+    if (profile) {
+        var el = document.getElementById('verifiedProfile');
+        el.textContent = '@ ' + profile;
+        el.style.display = 'block';
     }
+
+    setStatus('✅ Verified! Returning to Telegram...', 'success');
+
+    // Show success briefly then close — returns user to the bot
+    setTimeout(function() {
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.close();
+        }
+    }, 2000); // 2 second delay so user sees the green screen
+}
+
 </script>
 </body>
 </html>
