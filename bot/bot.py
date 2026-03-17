@@ -330,12 +330,12 @@ def main():
     logger.info(f"Starting webhook on {domain}")
 
     app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path="/webhook",
-        webhook_url=f"https://{domain}/webhook",
-        secret_token=BOT_TOKEN.replace(":", "_")
-    )
+    listen="0.0.0.0",
+    port=PORT,
+    url_path="/webhook",
+    webhook_url=f"https://{domain}/webhook",
+    # secret_token removed — was silently dropping updates
+)
     init_db()
     app = Application.builder().token(BOT_TOKEN).build()
 
