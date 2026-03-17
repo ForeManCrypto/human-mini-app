@@ -11,13 +11,13 @@ from telegram.ext import (
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Suppress httpx logs to hide token from Railway logs
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # ── Config ────────────────────────────────────────────────────────
 BOT_TOKEN    = os.environ.get("BOT_TOKEN")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://foremancrypto.github.io/human-mini-app")
+WEBHOOK_HOST = os.environ.get("WEBHOOK_HOST", "human-mini-app-production.up.railway.app")
+PORT         = int(os.environ.get("PORT", 8080))
 
 ENABLE_SETUP_FEE = False
 SETUP_FEE_STARS  = 299
@@ -27,7 +27,7 @@ IOS_URL     = "https://apps.apple.com/us/app/sharering-me/id6476899324"
 ANDROID_URL = "https://play.google.com/store/apps/details?id=network.sharering.me"
 ABOUT_URL   = "https://sharering.network"
 
-# ── Welcome message (standardized for all channels) ───────────────
+# ── Welcome message ───────────────────────────────────────────────
 WELCOME_TEXT = (
     "👋 *Welcome!*\n\n"
     "This is a *private channel* — Proof of Human is required to enter.\n\n"
@@ -129,8 +129,8 @@ def welcome_keyboard(chat_id):
 def download_keyboard():
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🍎 App Store (iOS)",       url=IOS_URL),
-            InlineKeyboardButton("🤖 Play Store (Android)",  url=ANDROID_URL),
+            InlineKeyboardButton("🍎 App Store (iOS)",      url=IOS_URL),
+            InlineKeyboardButton("🤖 Play Store (Android)", url=ANDROID_URL),
         ],
         [InlineKeyboardButton("← Back", callback_data="back_to_welcome")]
     ])
@@ -199,9 +199,10 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
 
 async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req     = update.chat_join_request
-    logger.info(f"JOIN REQUEST received from user {req.from_user.id} for chat {req.chat.id}")  # ADD THIS
     chat_id = req.chat.id
     user_id = req.from_user.id
+
+    logger.info(f"JOIN REQUEST received from user {user_id} for chat {chat_id}")
 
     if not is_activated(chat_id):
         await context.bot.send_message(
@@ -219,7 +220,6 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=welcome_keyboard(chat_id)
         )
     else:
-        # Returning user — skip straight to verification
         await context.bot.send_message(
             chat_id=user_id,
             text="👋 Welcome back! Tap below to verify.",
@@ -262,7 +262,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif data.startswith("back|"):
-        # Back button always carries chat_id — restore welcome screen
         chat_id = data.split("|")[1]
         await query.edit_message_text(
             WELCOME_TEXT,
@@ -298,7 +297,7 @@ async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"on_web_app_data error: {e}")
 
-# ── Main ──────────────────────────────────────────────────────────
+# ── Main — webhook mode ───────────────────────────────────────────
 def main():
     init_db()
     app = Application.builder().token(BOT_TOKEN).build()
@@ -318,8 +317,15 @@ def main():
         filters.SUCCESSFUL_PAYMENT, successful_payment_callback
     ))
 
-    logger.info("Proof of Human Bot started")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("Proof of Human Bot starting (webhook mode)")
+
+    # Webhook mode — Telegram pushes updates to us, no polling conflicts
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=f"https://{WEBHOOK_HOST}/webhook",
+        secret_token=BOT_TOKEN.replace(":", "_")  # simple secret to verify requests
+    )
 
 if __name__ == "__main__":
     main()
