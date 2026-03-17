@@ -435,7 +435,6 @@
                     </div>
                 </div>
             </div>
-            <p class="qr-hint" id="qrHint" style="display:none">Tap or scan with ShareRing Me → Approve</p>
             <div class="badges">
                 <div class="badge">🔒 Zero data stored</div>
                 
@@ -452,6 +451,7 @@
         </div>
 
     </div><!-- /.card -->
+            <p class="qr-hint" id="qrHint" style="display:none">Tap or scan with ShareRing Me → Approve</p>
 
     <!-- How it works -->
     <div class="steps-card" id="stepsCard">
@@ -569,6 +569,8 @@
         document.getElementById('srLoading').style.display = 'none';
         document.getElementById('qrSection').classList.add('hidden');
         document.getElementById('stepsCard').style.display = 'none';
+            document.getElementById('qrHint').style.display = 'none'; // ← add this line
+
         document.getElementById('verifiedOverlay').classList.add('show');
         document.getElementById('retryBtn').classList.remove('show');
 
