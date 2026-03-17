@@ -1,6 +1,7 @@
 import logging, json, sqlite3, os
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
+    KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove,
     WebAppInfo, LabeledPrice
 )
 from telegram.ext import (
@@ -8,6 +9,9 @@ from telegram.ext import (
     MessageHandler, CallbackQueryHandler, filters,
     ContextTypes, PreCheckoutQueryHandler
 )
+
+
+
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -135,16 +139,16 @@ def download_keyboard():
         [InlineKeyboardButton("← Back", callback_data="back_to_welcome")]
     ])
 
+# FIXED - supports sendData
+
+
 def instructions_keyboard(chat_id):
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "🔍 Verify Now",
-                web_app=WebAppInfo(url=f"{MINI_APP_URL}/?chat_id={chat_id}")
-            )
-        ],
-        [InlineKeyboardButton("← Back", callback_data=f"back|{chat_id}")]
-    ])
+    return ReplyKeyboardMarkup([
+        [KeyboardButton(
+            "🔍 Verify Now",
+            web_app=WebAppInfo(url=f"{MINI_APP_URL}/?chat_id={chat_id}")
+        )]
+    ], resize_keyboard=True, one_time_keyboard=True)
 
 def about_keyboard(chat_id):
     return InlineKeyboardMarkup([
@@ -201,6 +205,8 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req     = update.chat_join_request
     chat_id = req.chat.id
     user_id = req.from_user.id
+      # Store pending verification
+    context.bot_data[f"pending_{user_id}"] = chat_id
 
     logger.info(f"JOIN REQUEST received from user {user_id} for chat {chat_id}")
 
@@ -287,12 +293,15 @@ async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if profile:
                     msg += f"\n\nVerified profile: `{profile}`"
                 await update.effective_message.reply_text(
-                    msg, parse_mode="Markdown"
+                    msg,
+                    parse_mode="Markdown",
+                    reply_markup=ReplyKeyboardRemove()  # clean up the keyboard
                 )
                 logger.info(f"Approved user {user_id} for chat {chat_id} (profile: {profile})")
             else:
                 await update.effective_message.reply_text(
-                    "⚠️ This group hasn't been activated yet. Ask an admin to run /setup."
+                    "⚠️ This group hasn't been activated yet. Ask an admin to run /setup.",
+                    reply_markup=ReplyKeyboardRemove()
                 )
     except Exception as e:
         logger.error(f"on_web_app_data error: {e}")
