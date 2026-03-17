@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+*.env
+
+# Bot database
+bot/groups.db
+
+# Node / Wrangler
+node_modules/
+.wrangler/
+worker/.wrangler/
+
+# Secrets & env files
+.env
+.env.local
+.dev.vars
+
+# OS
+.DS_Store
+Thumbs.db
