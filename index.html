@@ -445,7 +445,7 @@
                         </div>
                     </div>
                 </div>
-                <p class="qr-hint" id="qrHint" style="display:none">Open ShareRing Me → Scan → Approve</p>
+<p class="qr-hint" id="qrHint" style="display:none">Tap the QR code or scan with ShareRing Me</p>
             </div>
 
             <!-- Verified -->
@@ -453,8 +453,10 @@
                 <div class="verified-icon">✅</div>
                 <div class="verified-title">Identity Verified</div>
                 <div class="verified-profile" id="verifiedProfile" style="display:none"></div>
-<div class="verified-sub" id="verifiedSub">Your join request has been approved.<br>You can now close this and return to Telegram.</div>            </div>
-        </div>
+<div class="verified-sub">
+    Your join request has been approved.<br>
+    Return to Telegram — we'll take you to the group.
+</div>        </div>
 
         <!-- Steps card -->
         <div class="card" id="stepsCard">
@@ -589,14 +591,25 @@
 
         setStatus('✅ Identity verified — welcome!', 'success');
 
-      setTimeout(function() {
+   setTimeout(function() {
     if (window.Telegram && window.Telegram.WebApp) {
-        // Just close the mini app — Telegram returns user to the bot chat
-        // Bot will have already sent "Welcome!" message
+        // For supergroups, chat_id starts with -100
+        // Remove -100 prefix for the deep link
+        var groupId = chatId.replace(/^-100/, '');
+        
+        // Try to open the group then close
+        try {
+            window.Telegram.WebApp.openTelegramLink(
+                'https://t.me/c/' + groupId + '/1'
+            );
+        } catch(e) {
+            console.warn('Could not open group link:', e);
+        }
+        
         window.Telegram.WebApp.close();
     }
-}, 2000);
-    }
+}, 2500);
+
 </script>
 </body>
 </html>
