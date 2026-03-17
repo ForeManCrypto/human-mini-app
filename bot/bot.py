@@ -9,7 +9,7 @@ from telegram.ext import (
     ContextTypes, PreCheckoutQueryHandler
 )
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
