@@ -1,4 +1,4 @@
-import logging, json, sqlite3, os
+import logging, json, sqlite3, os, hashlib, urllib.request
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
     WebAppInfo, LabeledPrice
@@ -9,15 +9,21 @@ from telegram.ext import (
     ContextTypes, PreCheckoutQueryHandler
 )
 
+# ── Logging ───────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # ── Config ────────────────────────────────────────────────────────
-BOT_TOKEN    = os.environ.get("BOT_TOKEN")
-MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://foremancrypto.github.io/human-mini-app")
-WEBHOOK_HOST = os.environ.get("WEBHOOK_HOST", "human-mini-app-production.up.railway.app")
-PORT         = int(os.environ.get("PORT", 8080))
+BOT_TOKEN      = os.environ.get("BOT_TOKEN")
+MINI_APP_URL   = os.environ.get("MINI_APP_URL", "https://foremancrypto.github.io/human-mini-app")
+WEBHOOK_HOST   = os.environ.get("WEBHOOK_HOST", "human-mini-app-production.up.railway.app")
+PORT           = int(os.environ.get("PORT", 8080))
+WORKER_URL     = os.environ.get("WORKER_URL", "https://human-bot-worker.moneyforeman.workers.dev")
+WORKER_SECRET  = os.environ.get("WORKER_SECRET", "")
+
+# C4 — deterministic webhook secret derived from BOT_TOKEN
+WEBHOOK_SECRET = hashlib.sha256(BOT_TOKEN.encode()).hexdigest()[:64] if BOT_TOKEN else ""
 
 ENABLE_SETUP_FEE = False
 SETUP_FEE_STARS  = 299
@@ -66,52 +72,79 @@ INSTRUCTIONS_TEXT = (
     "The whole process takes about *30 seconds*. ✅"
 )
 
-# ── Database ──────────────────────────────────────────────────────
-def init_db():
-    conn = sqlite3.connect("groups.db")
-    conn.execute('''CREATE TABLE IF NOT EXISTS groups
-                    (chat_id INTEGER PRIMARY KEY, activated INTEGER)''')
-    conn.execute('''CREATE TABLE IF NOT EXISTS seen_users
-                    (user_id INTEGER, chat_id INTEGER,
-                     PRIMARY KEY (user_id, chat_id))''')
-    conn.commit()
-    conn.close()
+# ── Database (M2 — module-level connection with WAL mode) ─────────
+_db = sqlite3.connect("groups.db", check_same_thread=False)
+_db.execute("PRAGMA journal_mode=WAL")
+_db.execute("PRAGMA busy_timeout=5000")
+_db.execute('''CREATE TABLE IF NOT EXISTS groups
+               (chat_id INTEGER PRIMARY KEY, activated INTEGER)''')
+_db.execute('''CREATE TABLE IF NOT EXISTS seen_users
+               (user_id INTEGER, chat_id INTEGER,
+                PRIMARY KEY (user_id, chat_id))''')
+_db.commit()
 
 def is_activated(chat_id):
     if not ENABLE_SETUP_FEE:
         return True
-    conn = sqlite3.connect("groups.db")
-    row  = conn.execute(
+    row = _db.execute(
         "SELECT activated FROM groups WHERE chat_id=?", (chat_id,)
     ).fetchone()
-    conn.close()
     return bool(row and row[0])
 
 def activate_group(chat_id):
-    conn = sqlite3.connect("groups.db")
-    conn.execute("INSERT OR REPLACE INTO groups VALUES (?,1)", (chat_id,))
-    conn.commit()
-    conn.close()
+    _db.execute("INSERT OR REPLACE INTO groups VALUES (?,1)", (chat_id,))
+    _db.commit()
 
 def has_seen_welcome(user_id, chat_id):
-    conn = sqlite3.connect("groups.db")
-    row  = conn.execute(
+    row = _db.execute(
         "SELECT 1 FROM seen_users WHERE user_id=? AND chat_id=?",
         (user_id, chat_id)
     ).fetchone()
-    conn.close()
     return bool(row)
 
 def mark_seen(user_id, chat_id):
-    conn = sqlite3.connect("groups.db")
-    conn.execute(
+    _db.execute(
         "INSERT OR IGNORE INTO seen_users VALUES (?,?)", (user_id, chat_id)
     )
-    conn.commit()
-    conn.close()
+    _db.commit()
+
+# ── Worker session registration (C2 fix) ─────────────────────────
+def register_session(session_id: str, user_id: int, chat_id: int):
+    """
+    Called server-side by the bot after a join request.
+    Pre-registers the pending session so the Worker knows which
+    user/chat to approve when ShareRing POSTs to /verified.
+    NOTE: session_id is not known yet at this point — the ShareRing
+    SDK generates it client-side. We store user_id/chat_id keyed by
+    a bot-generated token, and the mini app exchanges it on load.
+    For now we pass user_id and chat_id via the URL (existing approach)
+    and keep this function for future server-side session generation.
+    """
+    if not WORKER_SECRET or not WORKER_URL:
+        logger.warning("WORKER_SECRET or WORKER_URL not set — skipping session pre-registration")
+        return
+
+    try:
+        data = json.dumps({
+            "session_id": session_id,
+            "user_id": str(user_id),
+            "chat_id": str(chat_id)
+        }).encode()
+        req = urllib.request.Request(
+            f"{WORKER_URL}/session",
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {WORKER_SECRET}"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            logger.info(f"Session pre-registered: status={resp.status}")
+    except Exception as e:
+        logger.warning(f"Session pre-registration failed: {e}")
 
 def mini_app_url(chat_id, user_id):
-    """Build mini app URL with both chat_id and user_id."""
     return f"{MINI_APP_URL}/?chat_id={chat_id}&user_id={user_id}"
 
 # ── Keyboards ─────────────────────────────────────────────────────
@@ -205,7 +238,7 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = req.chat.id
     user_id = req.from_user.id
 
-    logger.info(f"JOIN REQUEST received from user {user_id} for chat {chat_id}")
+    logger.info(f"JOIN REQUEST from user {user_id} for chat {chat_id}")
 
     if not is_activated(chat_id):
         await context.bot.send_message(
@@ -270,28 +303,24 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Fallback handler — Worker approves directly, but this catches any
-    sendData that does come through as a safety net.
-    """
+    """Fallback — Worker approves directly but this catches sendData as safety net."""
     try:
         payload = json.loads(update.effective_message.web_app_data.data)
-        logger.info(f"WebApp data received: {payload}")
+        logger.info(f"WebApp data received action={payload.get('action')}")
 
         if payload.get("action") == "human_verified":
             user_id = update.effective_user.id
-            chat_id = int(payload.get("chat_id"))
+            chat_id = int(payload.get("chat_id", 0))
             profile = payload.get("profile", "")
 
-            if is_activated(chat_id):
+            if chat_id and is_activated(chat_id):
                 try:
                     await context.bot.approve_chat_join_request(
                         chat_id=chat_id, user_id=user_id
                     )
                     logger.info(f"Approved user {user_id} for chat {chat_id} via sendData fallback")
                 except Exception as e:
-                    # May already be approved by Worker — that's fine
-                    logger.info(f"Approve via sendData: {e}")
+                    logger.info(f"sendData fallback approve (may already be approved): {e}")
 
                 msg = "✅ *Human verified. Welcome!*"
                 if profile:
@@ -302,41 +331,6 @@ async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Main ──────────────────────────────────────────────────────────
 def main():
-    init_db()
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    # ── Debug catch-all (remove after debugging) ──
-    async def debug_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        logger.info(f"ANY UPDATE RECEIVED: {update}")
-    app.add_handler(MessageHandler(filters.ALL, debug_all), group=-1)
-    # ─────────────────────────────────────────────
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler(
-        "setup", setup_command,
-        filters.ChatType.GROUP | filters.ChatType.SUPERGROUP
-    ))
-    app.add_handler(ChatJoinRequestHandler(on_join_request))
-    app.add_handler(CallbackQueryHandler(on_callback))
-    app.add_handler(MessageHandler(
-        filters.StatusUpdate.WEB_APP_DATA, on_web_app_data
-    ))
-    app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
-    app.add_handler(MessageHandler(
-        filters.SUCCESSFUL_PAYMENT, successful_payment_callback
-    ))
-
-    domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", WEBHOOK_HOST)
-    logger.info(f"Starting webhook on {domain}")
-
-    app.run_webhook(
-    listen="0.0.0.0",
-    port=PORT,
-    url_path="/webhook",
-    webhook_url=f"https://{domain}/webhook",
-    # secret_token removed — was silently dropping updates
-)
-    init_db()
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -357,12 +351,13 @@ def main():
     domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", WEBHOOK_HOST)
     logger.info(f"Starting webhook on {domain}")
 
+    # C4 — webhook secret to prevent fake Telegram update injection
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         url_path="/webhook",
         webhook_url=f"https://{domain}/webhook",
-        secret_token=BOT_TOKEN.replace(":", "_")
+        secret_token=WEBHOOK_SECRET
     )
 
 if __name__ == "__main__":
