@@ -453,8 +453,7 @@
                 <div class="verified-icon">✅</div>
                 <div class="verified-title">Identity Verified</div>
                 <div class="verified-profile" id="verifiedProfile" style="display:none"></div>
-                <div class="verified-sub">Your join request has been approved.<br>Returning you to the group...</div>
-            </div>
+<div class="verified-sub" id="verifiedSub">Your join request has been approved.<br>You can now close this and return to Telegram.</div>            </div>
         </div>
 
         <!-- Steps card -->
@@ -590,13 +589,13 @@
 
         setStatus('✅ Identity verified — welcome!', 'success');
 
-        setTimeout(function() {
-            if (window.Telegram && window.Telegram.WebApp) {
-                var groupId = chatId.replace('-100', '');
-                window.Telegram.WebApp.openTelegramLink('tg://openmessage?chat_id=' + groupId);
-                window.Telegram.WebApp.close();
-            }
-        }, 2000);
+      setTimeout(function() {
+    if (window.Telegram && window.Telegram.WebApp) {
+        // Just close the mini app — Telegram returns user to the bot chat
+        // Bot will have already sent "Welcome!" message
+        window.Telegram.WebApp.close();
+    }
+}, 2000);
     }
 </script>
 </body>
