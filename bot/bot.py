@@ -232,7 +232,7 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton(
                     "✅ Verify Now →",
-                    web_app=WebAppInfo(url=f"{MINI_APP_URL}/?chat_id={chat_id}")
+                    web_app=WebAppInfo(url=f"{MINI_APP_URL}/?chat_id={chat_id}&user_id={user_id}")
                 )
             ]])
         )

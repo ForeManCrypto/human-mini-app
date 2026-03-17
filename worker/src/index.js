@@ -31,43 +31,37 @@ export default {
 
     // ── POST /verified ────────────────────────────────────────────
     // ShareRing posts here after a successful scan
-    if (request.method === 'POST' && url.pathname === '/verified') {
-      try {
-        const body = await request.json();
-        console.log('ShareRing POST received:', JSON.stringify(body));
+   if (request.method === 'POST' && url.pathname === '/verified') {
+    const body = await request.json();
+    const sessionId = body.sessionId || body.session_id;
+    const userId = body.user_id;
+    const chatId = body.chat_id;
 
-        // Extract session_id — ShareRing may use either key
-        const sessionId = body.sessionId || body.session_id;
-
-        if (!sessionId) {
-          return new Response(
-            JSON.stringify({ error: 'No session_id in payload' }),
-            { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        // Store in KV with 1 hour expiry (enough time to complete verification)
-        await env.SESSIONS.put(sessionId, JSON.stringify({
-          verified: true,
-          data: body,
-          timestamp: new Date().toISOString()
-        }), { expirationTtl: 3600 });
-
-        console.log('Session stored:', sessionId);
-
-        return new Response(
-          JSON.stringify({ success: true }),
-          { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } }
-        );
-
-      } catch (err) {
-        console.error('POST /verified error:', err.message);
-        return new Response(
-          JSON.stringify({ error: err.message }),
-          { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } }
-        );
-      }
+    if (!sessionId) {
+        return new Response(JSON.stringify({ error: 'No session_id' }), 
+            { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' }});
     }
+
+    // Store session
+    await env.SESSIONS.put(sessionId, JSON.stringify({
+        verified: true, data: body,
+        timestamp: new Date().toISOString()
+    }), { expirationTtl: 3600 });
+
+    // If we have user_id and chat_id, approve directly via Telegram API
+    if (userId && chatId) {
+        const BOT_TOKEN = env.BOT_TOKEN;
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/approveChatJoinRequest`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, user_id: userId })
+        });
+        console.log(`Approved user ${userId} for chat ${chatId}`);
+    }
+
+    return new Response(JSON.stringify({ success: true }), 
+        { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' }});
+}
 
     // ── GET /check?session=SESSION_ID ─────────────────────────────
     // Your index.html polls this after onScan fires
