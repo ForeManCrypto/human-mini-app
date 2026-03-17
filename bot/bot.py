@@ -317,14 +317,17 @@ def main():
         filters.SUCCESSFUL_PAYMENT, successful_payment_callback
     ))
 
-    logger.info("Proof of Human Bot starting (webhook mode)")
+    # Use Railway's built-in domain variable
+    domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", WEBHOOK_HOST)
 
-    # Webhook mode — Telegram pushes updates to us, no polling conflicts
+    logger.info(f"Starting webhook on {domain}")
+
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_url=f"https://{WEBHOOK_HOST}/webhook",
-        secret_token=BOT_TOKEN.replace(":", "_")  # simple secret to verify requests
+        url_path="/webhook",                        # ← THIS was missing
+        webhook_url=f"https://{domain}/webhook",
+        secret_token=BOT_TOKEN.replace(":", "_")
     )
 
 if __name__ == "__main__":
