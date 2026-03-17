@@ -305,6 +305,40 @@ def main():
     init_db()
     app = Application.builder().token(BOT_TOKEN).build()
 
+    # ── Debug catch-all (remove after debugging) ──
+    async def debug_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logger.info(f"ANY UPDATE RECEIVED: {update}")
+    app.add_handler(MessageHandler(filters.ALL, debug_all), group=-1)
+    # ─────────────────────────────────────────────
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler(
+        "setup", setup_command,
+        filters.ChatType.GROUP | filters.ChatType.SUPERGROUP
+    ))
+    app.add_handler(ChatJoinRequestHandler(on_join_request))
+    app.add_handler(CallbackQueryHandler(on_callback))
+    app.add_handler(MessageHandler(
+        filters.StatusUpdate.WEB_APP_DATA, on_web_app_data
+    ))
+    app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    app.add_handler(MessageHandler(
+        filters.SUCCESSFUL_PAYMENT, successful_payment_callback
+    ))
+
+    domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", WEBHOOK_HOST)
+    logger.info(f"Starting webhook on {domain}")
+
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path="/webhook",
+        webhook_url=f"https://{domain}/webhook",
+        secret_token=BOT_TOKEN.replace(":", "_")
+    )
+    init_db()
+    app = Application.builder().token(BOT_TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler(
         "setup", setup_command,
