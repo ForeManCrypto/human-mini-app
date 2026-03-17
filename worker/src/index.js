@@ -104,12 +104,8 @@ export default {
         // Requires Authorization: Bearer WORKER_SECRET header
         if (request.method === 'POST' && url.pathname === '/session') {
             try {
-                // C2 — verify bot token
-                const auth = request.headers.get('Authorization') || '';
-                const token = auth.replace('Bearer ', '');
-                if (!env.WORKER_SECRET || !timingSafeEqual(token, env.WORKER_SECRET)) {
-                    return json({ error: 'Unauthorized' }, 401, request);
-                }
+                // C2 — TODO: move session creation to bot side
+// Temporarily allowing frontend calls until initData validation is implemented
 
                 const body = await request.json();
                 const { session_id, user_id, chat_id } = body;
