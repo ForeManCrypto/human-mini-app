@@ -297,7 +297,7 @@
     }
 
     // ── onInit: QR is rendered and ready ─────────────────────────
-   window.onInit = function(data) {
+    window.onInit = function(data) {
     trustedSessionId = data && (data.session_id || data.sessionId);
     
     // Register session with Worker so it knows user_id + chat_id
@@ -310,6 +310,16 @@
             chat_id: chatId       // from URL params
         })
     });
+
+        // Accept both session_id and sessionId — ShareRing uses both
+        trustedSessionId = data && (data.session_id || data.sessionId);
+        console.log('Trusted session_id:', trustedSessionId);
+
+        document.getElementById('srLoading').style.display = 'none';
+        document.querySelector('.sharering-query').style.display = 'inline-block';
+        document.getElementById('qrHint').style.display = 'block';
+        setStatus('QR Ready — scan with ShareRing Me app');
+    };
 
     // ── onScan: user approved in ShareRing Me app ─────────────────
     window.onScan = function(data) {
