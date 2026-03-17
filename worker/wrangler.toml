@@ -2,10 +2,12 @@ name = "human-bot-worker"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
-# KV namespace for storing verified sessions
-# After deploying once, run:
-#   npx wrangler kv:namespace create SESSIONS
-# Then paste the id you get back into the id field below
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+
 [[kv_namespaces]]
 binding = "SESSIONS"
 id = "8b74a121b9454bc0898f2a3fa2762f33"
