@@ -10,10 +10,7 @@ from telegram.ext import (
     ContextTypes, PreCheckoutQueryHandler
 )
 
-
-
-
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -31,7 +28,7 @@ IOS_URL     = "https://apps.apple.com/us/app/sharering-me/id6476899324"
 ANDROID_URL = "https://play.google.com/store/apps/details?id=network.sharering.me"
 ABOUT_URL   = "https://sharering.network"
 
-# ── Welcome message ───────────────────────────────────────────────
+# ── Messages ──────────────────────────────────────────────────────
 WELCOME_TEXT = (
     "👋 *Welcome!*\n\n"
     "This is a *private channel* — Proof of Human is required to enter.\n\n"
@@ -117,6 +114,7 @@ def mark_seen(user_id, chat_id):
 
 # ── Keyboards ─────────────────────────────────────────────────────
 def welcome_keyboard(chat_id):
+    """Inline keyboard for the welcome message — About Us, Download, Start Verification."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("ℹ️ About Us",     callback_data=f"about|{chat_id}"),
@@ -139,22 +137,26 @@ def download_keyboard():
         [InlineKeyboardButton("← Back", callback_data="back_to_welcome")]
     ])
 
-# FIXED - supports sendData
-
-
-def instructions_keyboard(chat_id):
-    return ReplyKeyboardMarkup([
-        [KeyboardButton(
-            "🔍 Verify Now",
-            web_app=WebAppInfo(url=f"{MINI_APP_URL}/?chat_id={chat_id}")
-        )]
-    ], resize_keyboard=True, one_time_keyboard=True)
-
 def about_keyboard(chat_id):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 sharering.network", url=ABOUT_URL)],
         [InlineKeyboardButton("← Back", callback_data=f"back|{chat_id}")]
     ])
+
+def verify_keyboard(chat_id):
+    """
+    ReplyKeyboardMarkup with KeyboardButton + WebAppInfo.
+    This is the ONLY keyboard type that supports sendData back to the bot.
+    InlineKeyboardButton with WebAppInfo does NOT support sendData.
+    """
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton(
+            "🔍 Verify Now",
+            web_app=WebAppInfo(url=f"{MINI_APP_URL}/?chat_id={chat_id}")
+        )]],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
 
 # ── Handlers ──────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -205,7 +207,8 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req     = update.chat_join_request
     chat_id = req.chat.id
     user_id = req.from_user.id
-      # Store pending verification
+
+    # Store pending verification so we can approve later
     context.bot_data[f"pending_{user_id}"] = chat_id
 
     logger.info(f"JOIN REQUEST received from user {user_id} for chat {chat_id}")
@@ -219,6 +222,7 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not has_seen_welcome(user_id, chat_id):
         mark_seen(user_id, chat_id)
+        # First time — send full welcome flow with inline buttons
         await context.bot.send_message(
             chat_id=user_id,
             text=WELCOME_TEXT,
@@ -226,15 +230,12 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=welcome_keyboard(chat_id)
         )
     else:
+        # Returning user — skip straight to verify button
         await context.bot.send_message(
             chat_id=user_id,
-            text="👋 Welcome back! Tap below to verify.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(
-                    "✅ Verify Now →",
-                    web_app=WebAppInfo(url=f"{MINI_APP_URL}/?chat_id={chat_id}")
-                )
-            ]])
+            text=INSTRUCTIONS_TEXT,
+            parse_mode="Markdown",
+            reply_markup=verify_keyboard(chat_id)
         )
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -251,6 +252,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif data.startswith("download|"):
+        chat_id = data.split("|")[1]
         await query.edit_message_text(
             "📱 *Download ShareRing Me*\n\n"
             "Choose your platform below. Once installed, set up your "
@@ -261,10 +263,17 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("instructions|"):
         chat_id = data.split("|")[1]
+        # Edit the inline message to show instructions (no ReplyKeyboard here)
         await query.edit_message_text(
             INSTRUCTIONS_TEXT,
-            parse_mode="Markdown",
-            reply_markup=instructions_keyboard(chat_id)
+            parse_mode="Markdown"
+        )
+        # Send a NEW message with the ReplyKeyboard verify button
+        # ReplyKeyboard is required for sendData to work
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="Tap the button below to start verification 👇",
+            reply_markup=verify_keyboard(chat_id)
         )
 
     elif data.startswith("back|"):
@@ -295,7 +304,7 @@ async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.effective_message.reply_text(
                     msg,
                     parse_mode="Markdown",
-                    reply_markup=ReplyKeyboardRemove()  # clean up the keyboard
+                    reply_markup=ReplyKeyboardRemove()
                 )
                 logger.info(f"Approved user {user_id} for chat {chat_id} (profile: {profile})")
             else:
@@ -326,15 +335,13 @@ def main():
         filters.SUCCESSFUL_PAYMENT, successful_payment_callback
     ))
 
-    # Use Railway's built-in domain variable
     domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", WEBHOOK_HOST)
-
     logger.info(f"Starting webhook on {domain}")
 
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path="/webhook",                        # ← THIS was missing
+        url_path="/webhook",
         webhook_url=f"https://{domain}/webhook",
         secret_token=BOT_TOKEN.replace(":", "_")
     )
