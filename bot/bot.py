@@ -1,7 +1,6 @@
 import logging, json, sqlite3, os
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
-    KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove,
     WebAppInfo, LabeledPrice
 )
 from telegram.ext import (
@@ -10,10 +9,7 @@ from telegram.ext import (
     ContextTypes, PreCheckoutQueryHandler
 )
 
-
-
-
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -26,12 +22,11 @@ PORT         = int(os.environ.get("PORT", 8080))
 ENABLE_SETUP_FEE = False
 SETUP_FEE_STARS  = 299
 
-# App store links
 IOS_URL     = "https://apps.apple.com/us/app/sharering-me/id6476899324"
 ANDROID_URL = "https://play.google.com/store/apps/details?id=network.sharering.me"
 ABOUT_URL   = "https://sharering.network"
 
-# ── Welcome message ───────────────────────────────────────────────
+# ── Messages ──────────────────────────────────────────────────────
 WELCOME_TEXT = (
     "👋 *Welcome!*\n\n"
     "This is a *private channel* — Proof of Human is required to enter.\n\n"
@@ -115,17 +110,21 @@ def mark_seen(user_id, chat_id):
     conn.commit()
     conn.close()
 
+def mini_app_url(chat_id, user_id):
+    """Build mini app URL with both chat_id and user_id."""
+    return f"{MINI_APP_URL}/?chat_id={chat_id}&user_id={user_id}"
+
 # ── Keyboards ─────────────────────────────────────────────────────
-def welcome_keyboard(chat_id):
+def welcome_keyboard(chat_id, user_id):
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("ℹ️ About Us",     callback_data=f"about|{chat_id}"),
-            InlineKeyboardButton("📱 Download App", callback_data=f"download|{chat_id}"),
+            InlineKeyboardButton("ℹ️ About Us",     callback_data=f"about|{chat_id}|{user_id}"),
+            InlineKeyboardButton("📱 Download App", callback_data=f"download|{chat_id}|{user_id}"),
         ],
         [
             InlineKeyboardButton(
                 "✅ Start Verification →",
-                callback_data=f"instructions|{chat_id}"
+                callback_data=f"instructions|{chat_id}|{user_id}"
             )
         ]
     ])
@@ -139,21 +138,21 @@ def download_keyboard():
         [InlineKeyboardButton("← Back", callback_data="back_to_welcome")]
     ])
 
-# FIXED - supports sendData
+def instructions_keyboard(chat_id, user_id):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🔍 Verify Now",
+                web_app=WebAppInfo(url=mini_app_url(chat_id, user_id))
+            )
+        ],
+        [InlineKeyboardButton("← Back", callback_data=f"back|{chat_id}|{user_id}")]
+    ])
 
-
-def instructions_keyboard(chat_id):
-    return ReplyKeyboardMarkup([
-        [KeyboardButton(
-            "🔍 Verify Now",
-            web_app=WebAppInfo(url=f"{MINI_APP_URL}/?chat_id={chat_id}")
-        )]
-    ], resize_keyboard=True, one_time_keyboard=True)
-
-def about_keyboard(chat_id):
+def about_keyboard(chat_id, user_id):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 sharering.network", url=ABOUT_URL)],
-        [InlineKeyboardButton("← Back", callback_data=f"back|{chat_id}")]
+        [InlineKeyboardButton("← Back", callback_data=f"back|{chat_id}|{user_id}")]
     ])
 
 # ── Handlers ──────────────────────────────────────────────────────
@@ -205,8 +204,6 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req     = update.chat_join_request
     chat_id = req.chat.id
     user_id = req.from_user.id
-      # Store pending verification
-    context.bot_data[f"pending_{user_id}"] = chat_id
 
     logger.info(f"JOIN REQUEST received from user {user_id} for chat {chat_id}")
 
@@ -223,31 +220,28 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=user_id,
             text=WELCOME_TEXT,
             parse_mode="Markdown",
-            reply_markup=welcome_keyboard(chat_id)
+            reply_markup=welcome_keyboard(chat_id, user_id)
         )
     else:
         await context.bot.send_message(
             chat_id=user_id,
-            text="👋 Welcome back! Tap below to verify.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton(
-                    "✅ Verify Now →",
-                    web_app=WebAppInfo(url=f"{MINI_APP_URL}/?chat_id={chat_id}&user_id={user_id}")
-                )
-            ]])
+            text=INSTRUCTIONS_TEXT,
+            parse_mode="Markdown",
+            reply_markup=instructions_keyboard(chat_id, user_id)
         )
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data  = query.data
+    parts = data.split("|")
 
     if data.startswith("about|"):
-        chat_id = data.split("|")[1]
+        chat_id, user_id = parts[1], parts[2]
         await query.edit_message_text(
             ABOUT_TEXT,
             parse_mode="Markdown",
-            reply_markup=about_keyboard(chat_id)
+            reply_markup=about_keyboard(chat_id, user_id)
         )
 
     elif data.startswith("download|"):
@@ -260,22 +254,26 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif data.startswith("instructions|"):
-        chat_id = data.split("|")[1]
+        chat_id, user_id = parts[1], parts[2]
         await query.edit_message_text(
             INSTRUCTIONS_TEXT,
             parse_mode="Markdown",
-            reply_markup=instructions_keyboard(chat_id)
+            reply_markup=instructions_keyboard(chat_id, user_id)
         )
 
     elif data.startswith("back|"):
-        chat_id = data.split("|")[1]
+        chat_id, user_id = parts[1], parts[2]
         await query.edit_message_text(
             WELCOME_TEXT,
             parse_mode="Markdown",
-            reply_markup=welcome_keyboard(chat_id)
+            reply_markup=welcome_keyboard(chat_id, user_id)
         )
 
 async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Fallback handler — Worker approves directly, but this catches any
+    sendData that does come through as a safety net.
+    """
     try:
         payload = json.loads(update.effective_message.web_app_data.data)
         logger.info(f"WebApp data received: {payload}")
@@ -286,27 +284,23 @@ async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             profile = payload.get("profile", "")
 
             if is_activated(chat_id):
-                await context.bot.approve_chat_join_request(
-                    chat_id=chat_id, user_id=user_id
-                )
+                try:
+                    await context.bot.approve_chat_join_request(
+                        chat_id=chat_id, user_id=user_id
+                    )
+                    logger.info(f"Approved user {user_id} for chat {chat_id} via sendData fallback")
+                except Exception as e:
+                    # May already be approved by Worker — that's fine
+                    logger.info(f"Approve via sendData: {e}")
+
                 msg = "✅ *Human verified. Welcome!*"
                 if profile:
                     msg += f"\n\nVerified profile: `{profile}`"
-                await update.effective_message.reply_text(
-                    msg,
-                    parse_mode="Markdown",
-                    reply_markup=ReplyKeyboardRemove()  # clean up the keyboard
-                )
-                logger.info(f"Approved user {user_id} for chat {chat_id} (profile: {profile})")
-            else:
-                await update.effective_message.reply_text(
-                    "⚠️ This group hasn't been activated yet. Ask an admin to run /setup.",
-                    reply_markup=ReplyKeyboardRemove()
-                )
+                await update.effective_message.reply_text(msg, parse_mode="Markdown")
     except Exception as e:
         logger.error(f"on_web_app_data error: {e}")
 
-# ── Main — webhook mode ───────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────
 def main():
     init_db()
     app = Application.builder().token(BOT_TOKEN).build()
@@ -326,15 +320,13 @@ def main():
         filters.SUCCESSFUL_PAYMENT, successful_payment_callback
     ))
 
-    # Use Railway's built-in domain variable
     domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", WEBHOOK_HOST)
-
     logger.info(f"Starting webhook on {domain}")
 
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path="/webhook",                        # ← THIS was missing
+        url_path="/webhook",
         webhook_url=f"https://{domain}/webhook",
         secret_token=BOT_TOKEN.replace(":", "_")
     )
