@@ -208,10 +208,14 @@ if (!env.SHARERING_WEBHOOK_SECRET || !timingSafeEqual(secret || '', env.SHARERIN
                                 }
                             );
 
-                            // H2 — delete session after successful use
-                            await env.SESSIONS.delete(`meta_${sessionId}`);
-                            await env.SESSIONS.delete(sessionId);
-                            console.log(`Session ${sessionId} deleted after use`);
+                            // H2 — expire session shortly after use (30s gives mini app time to poll)
+await env.SESSIONS.delete(`meta_${sessionId}`);
+await env.SESSIONS.put(
+    sessionId,
+    JSON.stringify({ verified: true, data: body, timestamp: new Date().toISOString() }),
+    { expirationTtl: 30 }  // auto-deletes after 30 seconds
+);
+console.log(`Session ${sessionId} marked verified, expires in 30s`);
                         } else {
                             console.error(`Telegram approve failed: ${JSON.stringify(tgJson)}`);
                         }

@@ -531,12 +531,19 @@
         }
     };
 
-   window.onScan = function(data) {
-    // Override trustedSessionId with the one actually scanned
-    var scanSessionId = data && (data.session_id || data.sessionId);
+  window.onScan = function(data) {
+    console.log('onScan data:', JSON.stringify(data));
+    
+    // Use session from scan data (most reliable)
+    // Fall back to trustedSessionId from onInit
+    var scanSessionId = data && (data.sessionId || data.session_id);
     if (scanSessionId) {
+        console.log('Using session from onScan:', scanSessionId);
         trustedSessionId = scanSessionId;
+    } else {
+        console.log('Using session from onInit:', trustedSessionId);
     }
+
     setStatus('Verifying with server...');
     pollCount = 0;
     pollHandle = setInterval(doPoll, 1500);
