@@ -213,7 +213,7 @@ await env.SESSIONS.delete(`meta_${sessionId}`);
 await env.SESSIONS.put(
     sessionId,
     JSON.stringify({ verified: true, data: body, timestamp: new Date().toISOString() }),
-    { expirationTtl: 30 }  // auto-deletes after 30 seconds
+    { expirationTtl: 60 }  // minimum allowed by Cloudflare KV
 );
 console.log(`Session ${sessionId} marked verified, expires in 30s`);
                         } else {
