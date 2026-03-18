@@ -145,7 +145,9 @@ def register_session(session_id: str, user_id: int, chat_id: int):
         logger.warning(f"Session pre-registration failed: {e}")
 
 def mini_app_url(chat_id, user_id):
-    return f"{MINI_APP_URL}/?chat_id={chat_id}&user_id={user_id}"
+    import time
+    ts = int(time.time())
+    return f"{MINI_APP_URL}/?chat_id={chat_id}&user_id={user_id}&t={ts}"
 
 # ── Keyboards ─────────────────────────────────────────────────────
 def welcome_keyboard(chat_id, user_id):
