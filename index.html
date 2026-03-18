@@ -531,11 +531,16 @@
         }
     };
 
-    window.onScan = function(data) {
-        setStatus('Verifying with server...');
-        pollCount = 0;
-        pollHandle = setInterval(doPoll, 1500);
-    };
+   window.onScan = function(data) {
+    // Override trustedSessionId with the one actually scanned
+    var scanSessionId = data && (data.session_id || data.sessionId);
+    if (scanSessionId) {
+        trustedSessionId = scanSessionId;
+    }
+    setStatus('Verifying with server...');
+    pollCount = 0;
+    pollHandle = setInterval(doPoll, 1500);
+};
 
     async function doPoll() {
         pollCount++;
