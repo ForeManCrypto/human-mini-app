@@ -61,6 +61,11 @@ export class SessionStore {
                 }));
             }
 
+            case 'DELETE /meta': {
+                await this.state.storage.delete('meta');
+                return new Response(JSON.stringify({ success: true }));
+            }
+
             case 'DELETE /': {
                 await this.state.storage.deleteAll();
                 return new Response(JSON.stringify({ success: true }));
@@ -281,9 +286,9 @@ export default {
                                 console.log(`Cleaned up verify message ${meta.message_id} for user ${user_id}`);
                             }
 
-                            // H2 — delete session immediately after use
-                            await stub.fetch('http://do/', { method: 'DELETE' });
-                            console.log(`Session ${sessionId} deleted after use`);
+                            // H2 — delete meta to prevent re-approval, keep verified for frontend to poll
+                            await stub.fetch('http://do/meta', { method: 'DELETE' });
+                            console.log(`Session ${sessionId} approved and meta cleared`);
                         } else {
                             console.error(`Telegram approve failed: ${JSON.stringify(tgJson)}`);
                         }
