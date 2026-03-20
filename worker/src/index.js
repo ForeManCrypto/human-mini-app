@@ -1,30 +1,86 @@
 /**
  * Proof of Human — Cloudflare Worker
  *
- * Security fixes applied:
- *   C1 — /verified now requires secret from ShareRing
+ * Session storage uses Durable Objects for strong consistency.
+ * Rate limiting uses KV (eventual consistency is fine for this).
+ *
+ * Security:
+ *   C1 — /verified requires secret from ShareRing
  *   C3 — CORS restricted to actual frontend origins
- *   H2 — Sessions deleted from KV after successful verification
- *   M5 — Basic rate limiting via KV
+ *   H2 — Sessions auto-expire 1h via DO alarm, deleted immediately after use
+ *   M5 — Rate limiting via KV
  *   M6 — Input validation on all endpoints
  *
- * Reliability fixes applied:
- *   Fix 5 — Loosened session ID validation to accept ShareRing's actual format
- *   Fix 6 — Increased /check rate limit to handle retries
- *   Fix 8 — Added logging when meta lookup fails in /verified
- *
- * Required env vars (set in Cloudflare Worker secrets):
- *   BOT_TOKEN            — Telegram bot token
- *   WORKER_SECRET        — Shared secret between bot and worker (random string)
- *   SHARERING_WEBHOOK_SECRET — ShareRing webhook signing secret (from ShareRing dashboard)
+ * Required env vars (Cloudflare Worker secrets):
+ *   BOT_TOKEN                  — Telegram bot token
+ *   WORKER_SECRET              — Shared secret between bot and worker
+ *   SHARERING_WEBHOOK_SECRET   — ShareRing webhook signing secret
  *
  * Endpoints:
- *   POST /session   — Called by frontend to register user_id + chat_id
+ *   POST /session   — Frontend registers session_id + user_id + chat_id
  *   POST /verified  — ShareRing calls this after a successful scan
- *   GET  /check     — Frontend polls this to confirm verification
+ *   GET  /check     — Frontend polls to confirm verification
  */
 
-// ── Allowed frontend origins (C3) ────────────────────────────────
+// ── Durable Object — SessionStore ────────────────────────────────
+export class SessionStore {
+    constructor(state) {
+        this.state = state;
+    }
+
+    async fetch(request) {
+        const url = new URL(request.url);
+
+        switch (`${request.method} ${url.pathname}`) {
+
+            case 'PUT /meta': {
+                const data = await request.json();
+                await this.state.storage.put('meta', data);
+                // Auto-expire session after 1 hour
+                await this.state.storage.setAlarm(Date.now() + 3600 * 1000);
+                return new Response(JSON.stringify({ success: true }));
+            }
+
+            case 'GET /meta': {
+                const meta = await this.state.storage.get('meta');
+                if (!meta) return new Response(JSON.stringify({ found: false }), { status: 404 });
+                return new Response(JSON.stringify({ found: true, data: meta }));
+            }
+
+            case 'PUT /verified': {
+                const data = await request.json();
+                await this.state.storage.put('verified', data);
+                return new Response(JSON.stringify({ success: true }));
+            }
+
+            case 'GET /check': {
+                const verified = await this.state.storage.get('verified');
+                return new Response(JSON.stringify({
+                    verified: !!verified,
+                    data: verified ? verified.data : null
+                }));
+            }
+
+            case 'DELETE /': {
+                await this.state.storage.deleteAll();
+                return new Response(JSON.stringify({ success: true }));
+            }
+        }
+
+        return new Response('Not found', { status: 404 });
+    }
+
+    async alarm() {
+        await this.state.storage.deleteAll();
+    }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
+function getSession(env, sessionId) {
+    const id = env.SESSIONS.idFromName(sessionId);
+    return env.SESSIONS.get(id);
+}
+
 const ALLOWED_ORIGINS = [
     'https://foremancrypto.github.io',
     'https://web.telegram.org',
@@ -49,18 +105,6 @@ function json(data, status = 200, request = null) {
     });
 }
 
-// ── HMAC-SHA256 helpers (C1) ──────────────────────────────────────
-async function hmacSHA256(message, secret) {
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-        'raw', enc.encode(secret),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false, ['sign']
-    );
-    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
-    return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 function timingSafeEqual(a, b) {
     if (a.length !== b.length) return false;
     let result = 0;
@@ -71,7 +115,6 @@ function timingSafeEqual(a, b) {
 }
 
 // ── Input validation (M6) ─────────────────────────────────────────
-// Fix 5 (CRITICAL): Accept ShareRing's actual session ID format, not just UUID v4
 function isValidSessionId(id) {
     return typeof id === 'string' && id.length >= 8 && id.length <= 128 && /^[a-zA-Z0-9_.-]+$/.test(id);
 }
@@ -91,13 +134,14 @@ function isValidMessageId(id) {
 // ── Rate limiting via KV (M5) ─────────────────────────────────────
 async function isRateLimited(env, key, maxRequests = 10, windowSecs = 60) {
     const rlKey = `rl_${key}`;
-    const raw = await env.SESSIONS.get(rlKey);
+    const raw = await env.RATE_LIMIT.get(rlKey);
     const count = raw ? parseInt(raw) : 0;
     if (count >= maxRequests) return true;
-    await env.SESSIONS.put(rlKey, String(count + 1), { expirationTtl: windowSecs });
+    await env.RATE_LIMIT.put(rlKey, String(count + 1), { expirationTtl: windowSecs });
     return false;
 }
 
+// ── Worker ────────────────────────────────────────────────────────
 export default {
     async fetch(request, env) {
         const url = new URL(request.url);
@@ -113,13 +157,11 @@ export default {
                 const body = await request.json();
                 const { session_id, user_id, chat_id, message_id } = body;
 
-                // M6 — validate inputs
                 if (!isValidSessionId(session_id)) return json({ error: 'Invalid session_id' }, 400, request);
                 if (!isValidUserId(user_id))       return json({ error: 'Invalid user_id' }, 400, request);
                 if (!isValidChatId(chat_id))       return json({ error: 'Invalid chat_id' }, 400, request);
                 if (message_id && !isValidMessageId(message_id)) return json({ error: 'Invalid message_id' }, 400, request);
 
-                // M5 — rate limit per user
                 if (await isRateLimited(env, `session_${user_id}`, 5, 60)) {
                     return json({ error: 'Rate limited' }, 429, request);
                 }
@@ -127,11 +169,12 @@ export default {
                 const meta = { user_id: String(user_id), chat_id: String(chat_id) };
                 if (message_id) meta.message_id = String(message_id);
 
-                await env.SESSIONS.put(
-                    `meta_${session_id}`,
-                    JSON.stringify(meta),
-                    { expirationTtl: 3600 }
-                );
+                const stub = getSession(env, session_id);
+                await stub.fetch('http://do/meta', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(meta)
+                });
 
                 console.log(`Session registered: ${session_id} → user=${user_id} chat=${chat_id} msg=${message_id || 'n/a'}`);
                 return json({ success: true }, 200, request);
@@ -143,7 +186,6 @@ export default {
         }
 
         // ── POST /verified ────────────────────────────────────────
-        // Called by ShareRing servers — requires secret (C1)
         if (request.method === 'POST' && url.pathname === '/verified') {
             try {
                 const rawBody = await request.text();
@@ -155,7 +197,6 @@ export default {
                     return json({ error: 'Unauthorized' }, 401, request);
                 }
 
-                // M5 — rate limit on /verified
                 const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
                 if (await isRateLimited(env, `verified_${clientIp}`, 20, 60)) {
                     return json({ error: 'Rate limited' }, 429, request);
@@ -165,29 +206,29 @@ export default {
                 console.log('ShareRing POST:', JSON.stringify(body));
 
                 const sessionId = body.sessionId || body.session_id;
-
-                // M6 — validate session_id format
                 if (!isValidSessionId(sessionId)) {
                     return json({ error: 'Invalid session_id' }, 400, request);
                 }
 
-                // Store verification result (long TTL so frontend poll finds it even with KV delay)
-                await env.SESSIONS.put(
-                    sessionId,
-                    JSON.stringify({ verified: true, data: body, timestamp: new Date().toISOString() }),
-                    { expirationTtl: 3600 }
-                );
+                const stub = getSession(env, sessionId);
 
-                // Look up user_id + chat_id registered by the mini app
-                const metaRaw = await env.SESSIONS.get(`meta_${sessionId}`);
+                // Store verification result in DO
+                await stub.fetch('http://do/verified', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ verified: true, data: body, timestamp: new Date().toISOString() })
+                });
 
-                // Fix 8: Log when meta lookup fails for debugging
-                if (!metaRaw) {
-                    console.warn(`No meta found for session ${sessionId} — session may not have been registered yet`);
+                // Look up meta registered by the frontend
+                const metaRes = await stub.fetch('http://do/meta');
+                const metaJson = await metaRes.json();
+
+                if (!metaJson.found) {
+                    console.warn(`No meta found for session ${sessionId}`);
                 }
 
-                if (metaRaw) {
-                    const meta = JSON.parse(metaRaw);
+                if (metaJson.found) {
+                    const meta = metaJson.data;
                     const { user_id, chat_id } = meta;
 
                     if (user_id && chat_id && env.BOT_TOKEN) {
@@ -207,7 +248,7 @@ export default {
                         console.log(`Telegram approve result: ${JSON.stringify(tgJson)}`);
 
                         if (tgJson.ok) {
-                            // Send welcome message to user
+                            // Send welcome message
                             await fetch(
                                 `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`,
                                 {
@@ -221,7 +262,7 @@ export default {
                                 }
                             );
 
-                            // Clean up the verify button message so it can't be tapped again
+                            // Clean up the verify button message
                             if (meta.message_id) {
                                 await fetch(
                                     `https://api.telegram.org/bot${env.BOT_TOKEN}/editMessageText`,
@@ -240,14 +281,9 @@ export default {
                                 console.log(`Cleaned up verify message ${meta.message_id} for user ${user_id}`);
                             }
 
-                            // H2 — expire session shortly after use
-                            await env.SESSIONS.delete(`meta_${sessionId}`);
-                            await env.SESSIONS.put(
-                                sessionId,
-                                JSON.stringify({ verified: true, data: body, timestamp: new Date().toISOString() }),
-                                { expirationTtl: 60 }
-                            );
-                            console.log(`Session ${sessionId} marked verified, expires in 60s`);
+                            // H2 — delete session immediately after use
+                            await stub.fetch('http://do/', { method: 'DELETE' });
+                            console.log(`Session ${sessionId} deleted after use`);
                         } else {
                             console.error(`Telegram approve failed: ${JSON.stringify(tgJson)}`);
                         }
@@ -266,22 +302,20 @@ export default {
         if (request.method === 'GET' && url.pathname === '/check') {
             const sessionId = url.searchParams.get('session');
 
-            // M6 — validate format
             if (!sessionId || !isValidSessionId(sessionId)) {
                 return json({ verified: false, error: 'Invalid session' }, 400, request);
             }
 
-            // Fix 6: Increased rate limit to handle retries (120 requests per 120s)
             const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
             if (await isRateLimited(env, `check_${clientIp}`, 120, 120)) {
                 return json({ verified: false, error: 'Rate limited' }, 429, request);
             }
 
             try {
-                const stored = await env.SESSIONS.get(sessionId);
-                if (!stored) return json({ verified: false }, 200, request);
-                const parsed = JSON.parse(stored);
-                return json({ verified: true, data: parsed.data }, 200, request);
+                const stub = getSession(env, sessionId);
+                const res = await stub.fetch('http://do/check');
+                const data = await res.json();
+                return json({ verified: data.verified, data: data.data }, 200, request);
             } catch(err) {
                 return json({ verified: false, error: 'Internal error' }, 500, request);
             }

@@ -8,6 +8,16 @@ enabled = true
 [observability.logs]
 enabled = true
 
+# KV — rate limiting only
 [[kv_namespaces]]
-binding = "SESSIONS"
+binding = "RATE_LIMIT"
 id = "8b74a121b9454bc0898f2a3fa2762f33"
+
+# Durable Objects — strongly consistent session storage
+[[durable_objects.bindings]]
+name = "SESSIONS"
+class_name = "SessionStore"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SessionStore"]
