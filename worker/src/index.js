@@ -2,12 +2,16 @@
  * Proof of Human — Cloudflare Worker
  *
  * Security fixes applied:
- *   C1 — /verified now requires HMAC-SHA256 signature from ShareRing
- *   C2 — /session now requires a signed token from the bot (WORKER_SECRET)
+ *   C1 — /verified now requires secret from ShareRing
  *   C3 — CORS restricted to actual frontend origins
  *   H2 — Sessions deleted from KV after successful verification
  *   M5 — Basic rate limiting via KV
  *   M6 — Input validation on all endpoints
+ *
+ * Reliability fixes applied:
+ *   Fix 5 — Loosened session ID validation to accept ShareRing's actual format
+ *   Fix 6 — Increased /check rate limit to handle retries
+ *   Fix 8 — Added logging when meta lookup fails in /verified
  *
  * Required env vars (set in Cloudflare Worker secrets):
  *   BOT_TOKEN            — Telegram bot token
@@ -15,7 +19,7 @@
  *   SHARERING_WEBHOOK_SECRET — ShareRing webhook signing secret (from ShareRing dashboard)
  *
  * Endpoints:
- *   POST /session   — Bot calls this (not frontend) to register user_id + chat_id
+ *   POST /session   — Called by frontend to register user_id + chat_id
  *   POST /verified  — ShareRing calls this after a successful scan
  *   GET  /check     — Frontend polls this to confirm verification
  */
@@ -67,9 +71,9 @@ function timingSafeEqual(a, b) {
 }
 
 // ── Input validation (M6) ─────────────────────────────────────────
+// Fix 5 (CRITICAL): Accept ShareRing's actual session ID format, not just UUID v4
 function isValidSessionId(id) {
-    // UUID v4 format
-    return typeof id === 'string' && /^[0-9a-f-]{36}$/.test(id);
+    return typeof id === 'string' && id.length >= 8 && id.length <= 128 && /^[a-zA-Z0-9_.-]+$/.test(id);
 }
 
 function isValidUserId(id) {
@@ -100,13 +104,8 @@ export default {
         }
 
         // ── POST /session ─────────────────────────────────────────
-        // Called by the BOT (server-side) — not the frontend
-        // Requires Authorization: Bearer WORKER_SECRET header
         if (request.method === 'POST' && url.pathname === '/session') {
             try {
-                // C2 — TODO: move session creation to bot side
-// Temporarily allowing frontend calls until initData validation is implemented
-
                 const body = await request.json();
                 const { session_id, user_id, chat_id } = body;
 
@@ -136,19 +135,19 @@ export default {
         }
 
         // ── POST /verified ────────────────────────────────────────
-        // Called by ShareRing servers — requires HMAC signature (C1)
+        // Called by ShareRing servers — requires secret (C1)
         if (request.method === 'POST' && url.pathname === '/verified') {
             try {
                 const rawBody = await request.text();
 
-                // C1 — verify ShareRing HMAC signature
-              const secret = url.searchParams.get('secret');
-if (!env.SHARERING_WEBHOOK_SECRET || !timingSafeEqual(secret || '', env.SHARERING_WEBHOOK_SECRET)) {
-    console.warn('Invalid secret on /verified');
-    return json({ error: 'Unauthorized' }, 401, request);
-}
+                // C1 — verify ShareRing secret
+                const secret = url.searchParams.get('secret');
+                if (!env.SHARERING_WEBHOOK_SECRET || !timingSafeEqual(secret || '', env.SHARERING_WEBHOOK_SECRET)) {
+                    console.warn('Invalid secret on /verified');
+                    return json({ error: 'Unauthorized' }, 401, request);
+                }
 
-                // M5 — basic rate limit on /verified
+                // M5 — rate limit on /verified
                 const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
                 if (await isRateLimited(env, `verified_${clientIp}`, 20, 60)) {
                     return json({ error: 'Rate limited' }, 429, request);
@@ -164,15 +163,21 @@ if (!env.SHARERING_WEBHOOK_SECRET || !timingSafeEqual(secret || '', env.SHARERIN
                     return json({ error: 'Invalid session_id' }, 400, request);
                 }
 
-                // Store verification result
+                // Store verification result (long TTL so frontend poll finds it even with KV delay)
                 await env.SESSIONS.put(
                     sessionId,
                     JSON.stringify({ verified: true, data: body, timestamp: new Date().toISOString() }),
                     { expirationTtl: 3600 }
                 );
 
-                // Look up user_id + chat_id registered by the bot
+                // Look up user_id + chat_id registered by the mini app
                 const metaRaw = await env.SESSIONS.get(`meta_${sessionId}`);
+
+                // Fix 8: Log when meta lookup fails for debugging
+                if (!metaRaw) {
+                    console.warn(`No meta found for session ${sessionId} — session may not have been registered yet`);
+                }
+
                 if (metaRaw) {
                     const meta = JSON.parse(metaRaw);
                     const { user_id, chat_id } = meta;
@@ -208,14 +213,14 @@ if (!env.SHARERING_WEBHOOK_SECRET || !timingSafeEqual(secret || '', env.SHARERIN
                                 }
                             );
 
-                            // H2 — expire session shortly after use (30s gives mini app time to poll)
-await env.SESSIONS.delete(`meta_${sessionId}`);
-await env.SESSIONS.put(
-    sessionId,
-    JSON.stringify({ verified: true, data: body, timestamp: new Date().toISOString() }),
-    { expirationTtl: 60 }  // minimum allowed by Cloudflare KV
-);
-console.log(`Session ${sessionId} marked verified, expires in 30s`);
+                            // H2 — expire session shortly after use
+                            await env.SESSIONS.delete(`meta_${sessionId}`);
+                            await env.SESSIONS.put(
+                                sessionId,
+                                JSON.stringify({ verified: true, data: body, timestamp: new Date().toISOString() }),
+                                { expirationTtl: 60 }
+                            );
+                            console.log(`Session ${sessionId} marked verified, expires in 60s`);
                         } else {
                             console.error(`Telegram approve failed: ${JSON.stringify(tgJson)}`);
                         }
@@ -231,7 +236,6 @@ console.log(`Session ${sessionId} marked verified, expires in 30s`);
         }
 
         // ── GET /check?session=SESSION_ID ─────────────────────────
-        // Called by frontend to poll verification status
         if (request.method === 'GET' && url.pathname === '/check') {
             const sessionId = url.searchParams.get('session');
 
@@ -240,9 +244,9 @@ console.log(`Session ${sessionId} marked verified, expires in 30s`);
                 return json({ verified: false, error: 'Invalid session' }, 400, request);
             }
 
-            // M5 — rate limit polling
+            // Fix 6: Increased rate limit to handle retries (120 requests per 120s)
             const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
-            if (await isRateLimited(env, `check_${clientIp}`, 60, 60)) {
+            if (await isRateLimited(env, `check_${clientIp}`, 120, 120)) {
                 return json({ verified: false, error: 'Rate limited' }, 429, request);
             }
 

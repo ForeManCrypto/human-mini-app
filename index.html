@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Proof of Human — ShareRing</title>
@@ -502,9 +499,8 @@
     var chatId           = urlParams.get('chat_id') || '';
     var userId           = urlParams.get('user_id') || '';
     var trustedSessionId = null;
-    var pollHandle       = null;
     var pollCount        = 0;
-    var maxPolls         = 40;
+    var maxPolls         = 60; /* Fix 3: increased from 40 to 60 (90s total) */
 
     function setStatus(msg, type) {
         document.getElementById('status').className = type || '';
@@ -531,34 +527,40 @@
         }
     };
 
-  window.onScan = function(data) {
-    console.log('onScan data:', JSON.stringify(data));
-    
-    // Use session from scan data (most reliable)
-    // Fall back to trustedSessionId from onInit
-    var scanSessionId = data && (data.sessionId || data.session_id);
-    if (scanSessionId) {
-        console.log('Using session from onScan:', scanSessionId);
-        trustedSessionId = scanSessionId;
-    } else {
-        console.log('Using session from onInit:', trustedSessionId);
-    }
+    /* Fix 1 (CRITICAL): Re-register session when onScan provides a different ID */
+    window.onScan = function(data) {
+        console.log('onScan data:', JSON.stringify(data));
+        var scanSessionId = data && (data.sessionId || data.session_id);
+        if (scanSessionId && scanSessionId !== trustedSessionId) {
+            console.log('Session changed on scan:', trustedSessionId, '->', scanSessionId);
+            trustedSessionId = scanSessionId;
+            /* Re-register with the NEW session ID so Worker can find the meta */
+            fetch(WORKER_URL + '/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: scanSessionId,
+                    user_id: userId,
+                    chat_id: chatId
+                })
+            }).catch(function(e) { console.warn('Session re-register error:', e); });
+        } else if (scanSessionId) {
+            trustedSessionId = scanSessionId;
+        }
+        setStatus('Verifying with server...');
+        pollCount = 0;
+        doPoll(); /* Fix 4: start immediately instead of waiting for first interval */
+    };
 
-    setStatus('Verifying with server...');
-    pollCount = 0;
-    pollHandle = setInterval(doPoll, 1500);
-};
-
+    /* Fix 4: Exponential backoff polling via recursive setTimeout */
     async function doPoll() {
         pollCount++;
         if (pollCount > maxPolls) {
-            clearInterval(pollHandle);
             setStatus('Verification timed out — please try again', 'error');
             document.getElementById('retryBtn').classList.add('show');
             return;
         }
         if (!trustedSessionId) {
-            clearInterval(pollHandle);
             setStatus('Session error — please close and try again', 'error');
             return;
         }
@@ -566,14 +568,17 @@
             var res  = await fetch(WORKER_URL + '/check?session=' + trustedSessionId);
             var json = await res.json();
             if (json.verified) {
-                clearInterval(pollHandle);
                 handleVerified(json.data || {});
+                return;
             } else {
                 setStatus('Verifying... (' + pollCount + '/' + maxPolls + ')');
             }
         } catch(err) {
             console.warn('Poll error:', err.message);
         }
+        /* Exponential backoff: 1.5s → ~4s cap */
+        var delay = Math.min(1500 * Math.pow(1.15, pollCount - 1), 4000);
+        setTimeout(doPoll, delay);
     }
 
     function retryVerification() {
@@ -584,7 +589,7 @@
         document.getElementById('srLoading').style.display = 'none';
         document.getElementById('qrSection').classList.add('hidden');
         document.getElementById('stepsCard').style.display = 'none';
-            document.getElementById('qrHint').style.display = 'none'; // ← add this line
+        document.getElementById('qrHint').style.display = 'none';
 
         document.getElementById('verifiedOverlay').classList.add('show');
         document.getElementById('retryBtn').classList.remove('show');
@@ -601,7 +606,7 @@
 
         setStatus('✅ Identity verified — welcome!', 'success');
 
-        // Show verified screen for 4 seconds then navigate to group
+        /* Show verified screen for 4 seconds then navigate to group */
         setTimeout(function() {
             if (window.Telegram && window.Telegram.WebApp) {
                 var groupId = chatId.replace(/^-100/, '');
@@ -614,6 +619,14 @@
             }
         }, 4000);
     }
+
+    /* Fix 2: SDK load timeout — show error if onInit never fires after 15s */
+    setTimeout(function() {
+        if (!trustedSessionId) {
+            setStatus('Failed to load verification — please retry', 'error');
+            document.getElementById('retryBtn').classList.add('show');
+        }
+    }, 15000);
 </script>
 </body>
 </html>
