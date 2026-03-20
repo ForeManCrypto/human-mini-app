@@ -205,13 +205,6 @@
             pointer-events: none;
         }
 
-        .qr-hint {
-            font-size: 12px;
-            color: var(--white-muted);
-            text-align: center;
-            font-family: 'DM Mono', monospace;
-            letter-spacing: 0.02em;
-        }
 
         /* Trust badges */
         .badges {
@@ -451,7 +444,6 @@
         </div>
 
     </div><!-- /.card -->
-<p class="qr-hint" id="qrHint" style="display:none; text-align:center; color:rgba(255,255,255,0.45); font-family:'DM Mono',monospace; font-size:12px; letter-spacing:0.02em; margin-top:-8px;">Tap or scan with ShareRing Me → Approve</p>
 
     <!-- How it works -->
     <div class="steps-card" id="stepsCard">
@@ -512,7 +504,6 @@
         trustedSessionId = data && (data.session_id || data.sessionId);
         document.getElementById('srLoading').style.display = 'none';
         document.querySelector('.sharering-query').style.display = 'inline-block';
-        document.getElementById('qrHint').style.display = 'block';
         setStatus('QR Ready — tap or scan with ShareRing Me');
 
         if (trustedSessionId) {
@@ -591,8 +582,6 @@
         document.getElementById('srLoading').style.display = 'none';
         document.getElementById('qrSection').classList.add('hidden');
         document.getElementById('stepsCard').style.display = 'none';
-        document.getElementById('qrHint').style.display = 'none';
-
         document.getElementById('verifiedOverlay').classList.add('show');
         document.getElementById('retryBtn').classList.remove('show');
 
