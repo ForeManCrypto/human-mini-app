@@ -110,6 +110,19 @@ function json(data, status = 200, request = null) {
     });
 }
 
+async function alertAdmin(env, message) {
+    if (!env.BOT_TOKEN || !env.ADMIN_TELEGRAM_ID) return;
+    await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            chat_id: env.ADMIN_TELEGRAM_ID,
+            text: `⚠️ *Proof of Human — Worker Alert*\n\n${message}`,
+            parse_mode: 'Markdown'
+        })
+    }).catch(() => {});
+}
+
 function timingSafeEqual(a, b) {
     if (a.length !== b.length) return false;
     let result = 0;
@@ -199,6 +212,7 @@ export default {
                 const secret = url.searchParams.get('secret');
                 if (!env.SHARERING_WEBHOOK_SECRET || !timingSafeEqual(secret || '', env.SHARERING_WEBHOOK_SECRET)) {
                     console.warn('Invalid secret on /verified');
+                    await alertAdmin(env, '🔐 Invalid secret on `/verified` — possible misconfiguration or probe.');
                     return json({ error: 'Unauthorized' }, 401, request);
                 }
 
@@ -230,6 +244,7 @@ export default {
 
                 if (!metaJson.found) {
                     console.warn(`No meta found for session ${sessionId}`);
+                    await alertAdmin(env, `🔍 No meta found for session \`${sessionId}\` — user may not have registered session before scanning.`);
                 }
 
                 if (metaJson.found) {
@@ -291,6 +306,7 @@ export default {
                             console.log(`Session ${sessionId} approved and meta cleared`);
                         } else {
                             console.error(`Telegram approve failed: ${JSON.stringify(tgJson)}`);
+                            await alertAdmin(env, `❌ Telegram approval failed for user \`${user_id}\` in chat \`${chat_id}\`\n\`${JSON.stringify(tgJson)}\``);
                         }
                     }
                 }

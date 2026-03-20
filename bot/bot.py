@@ -41,7 +41,7 @@ WELCOME_TEXT = (
     "━━━━━━━━━━━━━━━\n"
     "📱 *Before you start:*\n"
     "1. Download the *ShareRing Me* app\n"
-    "2. Set up your digital identity in the app\n"
+    "2. Set up your digital identity and add your *Social Profile* in the vault _(e.g. Social Network → Telegram)_\n"
     "3. Come back here and tap *Start Verification*\n"
     "━━━━━━━━━━━━━━━\n\n"
     "Tap a button below to get started 👇"
@@ -64,7 +64,7 @@ ABOUT_TEXT = (
 INSTRUCTIONS_TEXT = (
     "📋 *Before you scan the QR code:*\n\n"
     "1️⃣ Make sure you have the *ShareRing Me* app installed\n"
-    "2️⃣ Open the app and complete your identity setup\n"
+    "2️⃣ Open the app, complete your identity setup and add your *Social Profile* to the vault _(e.g. Social Network → Telegram)_\n"
     "3️⃣ Have your phone ready to scan\n\n"
     "When you tap *Verify Now*, a QR code will appear. "
     "Open ShareRing Me, tap the scan icon, and scan it. "
