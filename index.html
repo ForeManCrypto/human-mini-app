@@ -498,6 +498,7 @@
     var urlParams        = new URLSearchParams(window.location.search);
     var chatId           = urlParams.get('chat_id') || '';
     var userId           = urlParams.get('user_id') || '';
+    var messageId        = urlParams.get('message_id') || '';
     var trustedSessionId = null;
     var pollCount        = 0;
     var maxPolls         = 60; /* Fix 3: increased from 40 to 60 (90s total) */
@@ -521,7 +522,8 @@
                 body: JSON.stringify({
                     session_id: trustedSessionId,
                     user_id: userId,
-                    chat_id: chatId
+                    chat_id: chatId,
+                    message_id: messageId || undefined
                 })
             }).catch(function(e) { console.warn('Session register error:', e); });
         }

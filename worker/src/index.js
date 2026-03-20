@@ -84,6 +84,10 @@ function isValidChatId(id) {
     return id && /^-?\d{5,20}$/.test(String(id));
 }
 
+function isValidMessageId(id) {
+    return id && /^\d{1,15}$/.test(String(id));
+}
+
 // ── Rate limiting via KV (M5) ─────────────────────────────────────
 async function isRateLimited(env, key, maxRequests = 10, windowSecs = 60) {
     const rlKey = `rl_${key}`;
@@ -107,25 +111,29 @@ export default {
         if (request.method === 'POST' && url.pathname === '/session') {
             try {
                 const body = await request.json();
-                const { session_id, user_id, chat_id } = body;
+                const { session_id, user_id, chat_id, message_id } = body;
 
                 // M6 — validate inputs
                 if (!isValidSessionId(session_id)) return json({ error: 'Invalid session_id' }, 400, request);
                 if (!isValidUserId(user_id))       return json({ error: 'Invalid user_id' }, 400, request);
                 if (!isValidChatId(chat_id))       return json({ error: 'Invalid chat_id' }, 400, request);
+                if (message_id && !isValidMessageId(message_id)) return json({ error: 'Invalid message_id' }, 400, request);
 
                 // M5 — rate limit per user
                 if (await isRateLimited(env, `session_${user_id}`, 5, 60)) {
                     return json({ error: 'Rate limited' }, 429, request);
                 }
 
+                const meta = { user_id: String(user_id), chat_id: String(chat_id) };
+                if (message_id) meta.message_id = String(message_id);
+
                 await env.SESSIONS.put(
                     `meta_${session_id}`,
-                    JSON.stringify({ user_id: String(user_id), chat_id: String(chat_id) }),
+                    JSON.stringify(meta),
                     { expirationTtl: 3600 }
                 );
 
-                console.log(`Session registered: ${session_id} → user=${user_id} chat=${chat_id}`);
+                console.log(`Session registered: ${session_id} → user=${user_id} chat=${chat_id} msg=${message_id || 'n/a'}`);
                 return json({ success: true }, 200, request);
 
             } catch(err) {
@@ -212,6 +220,25 @@ export default {
                                     })
                                 }
                             );
+
+                            // Clean up the verify button message so it can't be tapped again
+                            if (meta.message_id) {
+                                await fetch(
+                                    `https://api.telegram.org/bot${env.BOT_TOKEN}/editMessageText`,
+                                    {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            chat_id: parseInt(user_id),
+                                            message_id: parseInt(meta.message_id),
+                                            text: '✅ *Identity verified — you\'ve been approved!*\n\nYou can now close this chat and join the group.',
+                                            parse_mode: 'Markdown',
+                                            reply_markup: { inline_keyboard: [] }
+                                        })
+                                    }
+                                );
+                                console.log(`Cleaned up verify message ${meta.message_id} for user ${user_id}`);
+                            }
 
                             // H2 — expire session shortly after use
                             await env.SESSIONS.delete(`meta_${sessionId}`);

@@ -144,10 +144,11 @@ def register_session(session_id: str, user_id: int, chat_id: int):
     except Exception as e:
         logger.warning(f"Session pre-registration failed: {e}")
 
-def mini_app_url(chat_id, user_id):
-    import time
-    ts = int(time.time())
-    return f"{MINI_APP_URL}/?chat_id={chat_id}&user_id={user_id}&t={ts}"
+def mini_app_url(chat_id, user_id, message_id=None):
+    url = f"{MINI_APP_URL}/?chat_id={chat_id}&user_id={user_id}"
+    if message_id:
+        url += f"&message_id={message_id}"
+    return url
 
 # ── Keyboards ─────────────────────────────────────────────────────
 def welcome_keyboard(chat_id, user_id):
@@ -173,12 +174,12 @@ def download_keyboard():
         [InlineKeyboardButton("← Back", callback_data="back_to_welcome")]
     ])
 
-def instructions_keyboard(chat_id, user_id):
+def instructions_keyboard(chat_id, user_id, message_id=None):
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
                 "🔍 Verify Now",
-                web_app=WebAppInfo(url=mini_app_url(chat_id, user_id))
+                web_app=WebAppInfo(url=mini_app_url(chat_id, user_id, message_id))
             )
         ],
         [InlineKeyboardButton("← Back", callback_data=f"back|{chat_id}|{user_id}")]
@@ -258,11 +259,16 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=welcome_keyboard(chat_id, user_id)
         )
     else:
-        await context.bot.send_message(
+        sent = await context.bot.send_message(
             chat_id=user_id,
             text=INSTRUCTIONS_TEXT,
             parse_mode="Markdown",
             reply_markup=instructions_keyboard(chat_id, user_id)
+        )
+        await context.bot.edit_message_reply_markup(
+            chat_id=user_id,
+            message_id=sent.message_id,
+            reply_markup=instructions_keyboard(chat_id, user_id, sent.message_id)
         )
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -290,10 +296,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("instructions|"):
         chat_id, user_id = parts[1], parts[2]
+        message_id = query.message.message_id
         await query.edit_message_text(
             INSTRUCTIONS_TEXT,
             parse_mode="Markdown",
-            reply_markup=instructions_keyboard(chat_id, user_id)
+            reply_markup=instructions_keyboard(chat_id, user_id, message_id)
         )
 
     elif data.startswith("back|"):
