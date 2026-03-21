@@ -329,6 +329,25 @@
         #status.success .status-dot,
         #status.error   .status-dot { animation: none; }
 
+        /* Join button */
+        .join-btn {
+            display: none;
+            width: 100%;
+            background: var(--teal);
+            border: none;
+            color: var(--blue-deep);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            padding: 14px 20px;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            letter-spacing: -0.01em;
+        }
+        .join-btn:hover { opacity: 0.88; }
+        .join-btn.show { display: block; }
+
         /* Retry */
         .retry-btn {
             display: none;
@@ -415,7 +434,8 @@
             <div class="verified-ring">✅</div>
             <div class="verified-title">Identity Verified</div>
             <div class="verified-profile" id="verifiedProfile" style="display:none"></div>
-            <div class="verified-sub">Your join request has been approved.<br>Taking you to the group in a moment...</div>
+            <div class="verified-sub">Your join request has been approved.<br>You'll be redirected shortly, or tap below.</div>
+            <button class="join-btn" id="joinBtn" onclick="goToGroup()">Join Group →</button>
         </div>
 
     </div><!-- /.card -->
@@ -547,6 +567,22 @@
         window.location.reload();
     }
 
+    function goToGroup() {
+        if (window.Telegram && window.Telegram.WebApp && chatId) {
+            var groupId = chatId.replace(/^-100/, '');
+            try {
+                window.Telegram.WebApp.openTelegramLink('https://t.me/c/' + groupId);
+            } catch(e) {
+                console.warn('Could not open group link:', e);
+            }
+        }
+        setTimeout(function() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.close();
+            }
+        }, 800);
+    }
+
     function handleVerified(data) {
         document.getElementById('srLoading').style.display = 'none';
         document.getElementById('qrSection').classList.add('hidden');
@@ -566,17 +602,15 @@
 
         setStatus('✅ Identity verified — welcome!', 'success');
 
-        setTimeout(function() {
-            if (window.Telegram && window.Telegram.WebApp) {
-                var groupId = chatId.replace(/^-100/, '');
-                try {
-                    window.Telegram.WebApp.openTelegramLink('https://t.me/c/' + groupId + '/1');
-                } catch(e) {
-                    console.warn('Could not open group link:', e);
-                }
-                window.Telegram.WebApp.close();
-            }
-        }, 4000);
+        // Show join button immediately as fallback
+        document.getElementById('joinBtn').classList.add('show');
+
+        // Try auto-navigation after a short pause so the user sees the success screen
+        if (chatId && window.Telegram && window.Telegram.WebApp) {
+            setTimeout(function() {
+                goToGroup();
+            }, 3000);
+        }
     }
 
     setTimeout(function() {
