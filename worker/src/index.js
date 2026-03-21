@@ -243,13 +243,23 @@ export default {
                     body: JSON.stringify({ verified: true, data: body, timestamp: new Date().toISOString() })
                 });
 
-                // Look up meta registered by the frontend
-                const metaRes = await stub.fetch('http://do/meta');
-                const metaJson = await metaRes.json();
+                // Look up meta registered by the frontend.
+                // Retry up to 3 times with 1s delay to handle the race where
+                // ShareRing calls /verified before the frontend's POST /session completes.
+                let metaJson = { found: false };
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    const metaRes = await stub.fetch('http://do/meta');
+                    metaJson = await metaRes.json();
+                    if (metaJson.found) break;
+                    if (attempt < 3) {
+                        console.log(`Meta not found for ${sessionId} (attempt ${attempt}/3) — retrying in 1s`);
+                        await new Promise(r => setTimeout(r, 1000));
+                    }
+                }
 
                 if (!metaJson.found) {
-                    console.warn(`No meta found for session ${sessionId}`);
-                    await alertAdmin(env, `🔍 No meta found for session \`${sessionId}\` — user may not have registered session before scanning.`);
+                    console.warn(`No meta found for session ${sessionId} after 3 attempts`);
+                    await alertAdmin(env, `🔍 No meta found for session \`${sessionId}\` after retries — possible race condition or unregistered session.`);
                 }
 
                 if (metaJson.found) {
