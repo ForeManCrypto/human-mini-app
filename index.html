@@ -495,7 +495,7 @@
     var pollSessions  = [];
     var inviteLink    = null;
     var pollCount     = 0;
-    var maxPolls      = 20;   // 20 × 1s = 20 seconds
+    var maxPolls      = 40;   // 40 × 0.5s = 20 seconds
 
     function setStatus(msg, type) {
         document.getElementById('status').className = type || '';
@@ -573,7 +573,7 @@
         } catch(err) {
             console.warn('Poll error:', err.message);
         }
-        setTimeout(doPoll, 1000);
+        setTimeout(doPoll, 500);
     }
 
     function retryVerification() {
