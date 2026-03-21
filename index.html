@@ -495,7 +495,7 @@
     var pollSessions  = [];
     var inviteLink    = null;
     var pollCount     = 0;
-    var maxPolls      = 60;
+    var maxPolls      = 150;  // 150 × 2s = 5 minutes
 
     function setStatus(msg, type) {
         document.getElementById('status').className = type || '';
@@ -569,16 +569,11 @@
                     return;
                 }
             }
-            if (pollCount <= 3) {
-                setStatus('QR scanned — open ShareRing Me and tap Approve ✓');
-            } else {
-                setStatus('Waiting for approval in ShareRing Me... (' + pollCount + '/' + maxPolls + ')');
-            }
+            setStatus('QR scanned — open ShareRing Me and tap Approve ✓');
         } catch(err) {
             console.warn('Poll error:', err.message);
         }
-        var delay = Math.min(1500 * Math.pow(1.15, pollCount - 1), 4000);
-        setTimeout(doPoll, delay);
+        setTimeout(doPoll, 2000);
     }
 
     function retryVerification() {
