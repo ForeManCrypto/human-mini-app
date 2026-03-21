@@ -481,60 +481,61 @@
 <script src="https://cdn.jsdelivr.net/gh/ShareRing/shareringlink-javascript-library@master/sharering.query.lib.prod.min.js"></script>
 
 <script>
-    var WORKER_URL       = 'https://human-bot-worker.moneyforeman.workers.dev';
-    var urlParams        = new URLSearchParams(window.location.search);
-    var chatId           = urlParams.get('chat_id') || '';
-    var userId           = urlParams.get('user_id') || '';
-    var messageId        = urlParams.get('message_id') || '';
-    var trustedSessionId = null;  // updated on each scan (may differ from init)
-    var initSessionId    = null;  // always the onInit session ID — kept as fallback
-    var inviteLink       = null;
-    var pollCount        = 0;
-    var maxPolls         = 60;
+    var WORKER_URL    = 'https://human-bot-worker.moneyforeman.workers.dev';
+    var urlParams     = new URLSearchParams(window.location.search);
+    var chatId        = urlParams.get('chat_id') || '';
+    var userId        = urlParams.get('user_id') || '';
+    var messageId     = urlParams.get('message_id') || '';
+    // Keep a rolling list of recent session IDs (most recent first, max 5).
+    // When the SDK rotates the QR after a scan, onInit fires with a NEW session
+    // while ShareRing will still call /verified with the SCANNED session.
+    // Polling all recent sessions ensures we never miss a verification.
+    var pollSessions  = [];
+    var inviteLink    = null;
+    var pollCount     = 0;
+    var maxPolls      = 60;
 
     function setStatus(msg, type) {
         document.getElementById('status').className = type || '';
         document.getElementById('statusText').textContent = msg;
     }
 
+    function addSession(id) {
+        if (!id) return;
+        // Remove existing entry then prepend so most-recent is first
+        pollSessions = [id].concat(pollSessions.filter(function(s) { return s !== id; }));
+        if (pollSessions.length > 5) pollSessions = pollSessions.slice(0, 5);
+    }
+
+    function registerSession(id) {
+        if (!id) return;
+        fetch(WORKER_URL + '/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: id,
+                user_id: userId,
+                chat_id: chatId,
+                message_id: messageId || undefined
+            })
+        }).catch(function(e) { console.warn('Session register error:', e); });
+    }
+
     window.onInit = function(data) {
-        trustedSessionId = initSessionId = data && (data.session_id || data.sessionId);
+        var sessionId = data && (data.session_id || data.sessionId);
+        if (!sessionId) return;
+        addSession(sessionId);
+        registerSession(sessionId);
         document.getElementById('srLoading').style.display = 'none';
         document.querySelector('.sharering-query').style.display = 'inline-block';
         setStatus('QR Ready — tap or scan with ShareRing Me');
-
-        if (trustedSessionId) {
-            fetch(WORKER_URL + '/session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    session_id: trustedSessionId,
-                    user_id: userId,
-                    chat_id: chatId,
-                    message_id: messageId || undefined
-                })
-            }).catch(function(e) { console.warn('Session register error:', e); });
-        }
     };
 
     window.onScan = function(data) {
-        var scanSessionId = data && (data.sessionId || data.session_id);
-        if (scanSessionId && scanSessionId !== trustedSessionId) {
-            trustedSessionId = scanSessionId;
-            // Re-register the new session ID — include message_id so button
-            // cleanup still works even if the QR rotated and gave a new session.
-            fetch(WORKER_URL + '/session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    session_id: scanSessionId,
-                    user_id: userId,
-                    chat_id: chatId,
-                    message_id: messageId || undefined
-                })
-            }).catch(function(e) { console.warn('Session re-register error:', e); });
-        } else if (scanSessionId) {
-            trustedSessionId = scanSessionId;
+        var sessionId = data && (data.sessionId || data.session_id);
+        if (sessionId) {
+            addSession(sessionId);
+            registerSession(sessionId);
         }
         setStatus('QR scanned — open ShareRing Me and tap Approve ✓');
         pollCount = 0;
@@ -548,20 +549,15 @@
             document.getElementById('retryBtn').classList.add('show');
             return;
         }
-        if (!trustedSessionId) {
+        if (pollSessions.length === 0) {
             setStatus('Session error — please close and try again', 'error');
             return;
         }
         try {
-            // Poll the current session (may differ from init if QR rotated on scan).
-            // Also poll the original init session as a fallback — ShareRing may call
-            // /verified with either ID depending on which QR was scanned.
-            var sessions = [trustedSessionId];
-            if (initSessionId && initSessionId !== trustedSessionId) {
-                sessions.push(initSessionId);
-            }
-            for (var i = 0; i < sessions.length; i++) {
-                var res  = await fetch(WORKER_URL + '/check?session=' + sessions[i]);
+            // Poll all recent sessions — ShareRing may call /verified with any of them
+            // (the scanned QR's session ID), not necessarily the latest onInit session.
+            for (var i = 0; i < pollSessions.length; i++) {
+                var res  = await fetch(WORKER_URL + '/check?session=' + pollSessions[i]);
                 var json = await res.json();
                 if (json.verified) {
                     if (json.invite_link) inviteLink = json.invite_link;
@@ -638,7 +634,7 @@
     }
 
     setTimeout(function() {
-        if (!trustedSessionId) {
+        if (pollSessions.length === 0) {
             setStatus('Failed to load verification — please retry', 'error');
             document.getElementById('retryBtn').classList.add('show');
         }
