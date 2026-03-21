@@ -532,7 +532,7 @@
         } else if (scanSessionId) {
             trustedSessionId = scanSessionId;
         }
-        setStatus('Verifying with server...');
+        setStatus('QR scanned — open ShareRing Me and tap Approve ✓');
         pollCount = 0;
         doPoll();
     };
@@ -555,8 +555,10 @@
                 if (json.invite_link) inviteLink = json.invite_link;
                 handleVerified(json.data || {});
                 return;
+            } else if (pollCount <= 3) {
+                setStatus('QR scanned — open ShareRing Me and tap Approve ✓');
             } else {
-                setStatus('Verifying... (' + pollCount + '/' + maxPolls + ')');
+                setStatus('Waiting for approval in ShareRing Me... (' + pollCount + '/' + maxPolls + ')');
             }
         } catch(err) {
             console.warn('Poll error:', err.message);
