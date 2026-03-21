@@ -486,7 +486,8 @@
     var chatId           = urlParams.get('chat_id') || '';
     var userId           = urlParams.get('user_id') || '';
     var messageId        = urlParams.get('message_id') || '';
-    var trustedSessionId = null;
+    var trustedSessionId = null;  // updated on each scan (may differ from init)
+    var initSessionId    = null;  // always the onInit session ID — kept as fallback
     var inviteLink       = null;
     var pollCount        = 0;
     var maxPolls         = 60;
@@ -497,7 +498,7 @@
     }
 
     window.onInit = function(data) {
-        trustedSessionId = data && (data.session_id || data.sessionId);
+        trustedSessionId = initSessionId = data && (data.session_id || data.sessionId);
         document.getElementById('srLoading').style.display = 'none';
         document.querySelector('.sharering-query').style.display = 'inline-block';
         setStatus('QR Ready — tap or scan with ShareRing Me');
@@ -520,13 +521,16 @@
         var scanSessionId = data && (data.sessionId || data.session_id);
         if (scanSessionId && scanSessionId !== trustedSessionId) {
             trustedSessionId = scanSessionId;
+            // Re-register the new session ID — include message_id so button
+            // cleanup still works even if the QR rotated and gave a new session.
             fetch(WORKER_URL + '/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     session_id: scanSessionId,
                     user_id: userId,
-                    chat_id: chatId
+                    chat_id: chatId,
+                    message_id: messageId || undefined
                 })
             }).catch(function(e) { console.warn('Session re-register error:', e); });
         } else if (scanSessionId) {
@@ -549,13 +553,23 @@
             return;
         }
         try {
-            var res  = await fetch(WORKER_URL + '/check?session=' + trustedSessionId);
-            var json = await res.json();
-            if (json.verified) {
-                if (json.invite_link) inviteLink = json.invite_link;
-                handleVerified(json.data || {});
-                return;
-            } else if (pollCount <= 3) {
+            // Poll the current session (may differ from init if QR rotated on scan).
+            // Also poll the original init session as a fallback — ShareRing may call
+            // /verified with either ID depending on which QR was scanned.
+            var sessions = [trustedSessionId];
+            if (initSessionId && initSessionId !== trustedSessionId) {
+                sessions.push(initSessionId);
+            }
+            for (var i = 0; i < sessions.length; i++) {
+                var res  = await fetch(WORKER_URL + '/check?session=' + sessions[i]);
+                var json = await res.json();
+                if (json.verified) {
+                    if (json.invite_link) inviteLink = json.invite_link;
+                    handleVerified(json.data || {});
+                    return;
+                }
+            }
+            if (pollCount <= 3) {
                 setStatus('QR scanned — open ShareRing Me and tap Approve ✓');
             } else {
                 setStatus('Waiting for approval in ShareRing Me... (' + pollCount + '/' + maxPolls + ')');
