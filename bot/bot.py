@@ -156,6 +156,26 @@ def main_keyboard(chat_id, user_id, message_id=None, action_type=None):
 
 # ── Handlers ──────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Deep-link from group fallback: /start verify_CHATID
+    if context.args and context.args[0].startswith('verify_'):
+        try:
+            chat_id = int(context.args[0][7:])
+        except ValueError:
+            pass
+        else:
+            user_id = update.effective_user.id
+            sent = await update.message.reply_text(
+                RESTRICTED_TEXT,
+                parse_mode="Markdown",
+                reply_markup=main_keyboard(chat_id, user_id, action_type="unrestrict"),
+            )
+            await context.bot.edit_message_reply_markup(
+                chat_id=user_id,
+                message_id=sent.message_id,
+                reply_markup=main_keyboard(chat_id, user_id, sent.message_id, action_type="unrestrict"),
+            )
+            return
+
     await update.message.reply_text(
         "👋 Add me as admin to your group and enable *Join Request Approval* "
         "to start human gating.\n\nMembers will receive a guided verification "
@@ -275,7 +295,22 @@ async def on_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_keyboard(chat_id, user.id, sent.message_id, action_type="unrestrict"),
         )
     except Exception as e:
-        logger.warning(f"Could not DM user {user.id}: {e}")
+        logger.warning(f"Could not DM user {user.id}: {e} — sending group fallback")
+        try:
+            bot_username = context.bot.username
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"👋 [{user.full_name}](tg://user?id={user.id}) — tap below to verify your identity and unlock messaging.",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton(
+                        "✅ Verify Now →",
+                        url=f"https://t.me/{bot_username}?start=verify_{chat_id}"
+                    )
+                ]]),
+            )
+        except Exception as e2:
+            logger.error(f"Could not send group fallback for user {user.id}: {e2}")
 
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
