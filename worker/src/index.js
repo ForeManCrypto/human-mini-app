@@ -336,7 +336,7 @@ export default {
                                 await alertAdmin(env, `❌ Telegram approval failed for user \`${user_id}\` in chat \`${chat_id}\`\n\`${JSON.stringify(tgJson)}\``);
                             }
 
-                            // Generate invite link for join-request flow.
+                            // Generate invite link (join-request flow).
                             try {
                                 const inviteRes = await fetch(
                                     `https://api.telegram.org/bot${env.BOT_TOKEN}/createChatInviteLink`,
@@ -362,7 +362,36 @@ export default {
                             }
                         }
 
-                        // Update verified record with invite link (null for unrestrict flow).
+                        // Generate invite link for unrestrict flow too — used by mini app to navigate
+                        // back to the group. Member_limit=1 still works; user is already in the group
+                        // so Telegram will just redirect them to the chat.
+                        if (meta.action_type === 'unrestrict' && !inviteLink) {
+                            try {
+                                const inviteRes = await fetch(
+                                    `https://api.telegram.org/bot${env.BOT_TOKEN}/createChatInviteLink`,
+                                    {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            chat_id: parseInt(chat_id),
+                                            member_limit: 1,
+                                            expire_date: Math.floor(Date.now() / 1000) + 300
+                                        })
+                                    }
+                                );
+                                const inviteJson = await inviteRes.json();
+                                if (inviteJson.ok) {
+                                    inviteLink = inviteJson.result.invite_link;
+                                    console.log(`Invite link created (unrestrict) for session ${sessionId}`);
+                                } else {
+                                    console.warn(`createChatInviteLink (unrestrict) failed: ${JSON.stringify(inviteJson)}`);
+                                }
+                            } catch(e) {
+                                console.warn(`createChatInviteLink (unrestrict) error: ${e.message}`);
+                            }
+                        }
+
+                        // Update verified record with invite link.
                         await stub.fetch('http://do/verified', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },

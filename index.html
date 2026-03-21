@@ -589,17 +589,18 @@
             }
             if (link) {
                 try {
+                    // openTelegramLink closes the mini app automatically
                     window.Telegram.WebApp.openTelegramLink(link);
+                    return;
                 } catch(e) {
                     console.warn('Could not open group link:', e);
                 }
             }
         }
-        setTimeout(function() {
-            if (window.Telegram && window.Telegram.WebApp) {
-                window.Telegram.WebApp.close();
-            }
-        }, 800);
+        // Fallback if openTelegramLink not available or failed
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.close();
+        }
     }
 
     function handleVerified(data) {
