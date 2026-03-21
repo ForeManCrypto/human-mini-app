@@ -185,7 +185,7 @@ export default {
                 if (!isValidChatId(chat_id))       return json({ error: 'Invalid chat_id' }, 400, request);
                 if (message_id && !isValidMessageId(message_id)) return json({ error: 'Invalid message_id' }, 400, request);
 
-                if (await isRateLimited(env, `session_${user_id}`, 5, 60)) {
+                if (await isRateLimited(env, `session_${user_id}`, 20, 60)) {
                     return json({ error: 'Rate limited' }, 429, request);
                 }
 
@@ -236,16 +236,9 @@ export default {
 
                 const stub = getSession(env, sessionId);
 
-                // Store verification result in DO
-                await stub.fetch('http://do/verified', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ verified: true, data: body, timestamp: new Date().toISOString() })
-                });
-
                 // Look up meta registered by the frontend.
-                // Retry up to 3 times with 1s delay to handle the race where
-                // ShareRing calls /verified before the frontend's POST /session completes.
+                // Retry up to 3x with 1s delay — handles the race where ShareRing
+                // calls /verified before the frontend's POST /session completes.
                 let metaJson = { found: false };
                 for (let attempt = 1; attempt <= 3; attempt++) {
                     const metaRes = await stub.fetch('http://do/meta');
@@ -284,8 +277,7 @@ export default {
 
                         if (tgJson.ok) {
                             // Generate a single-use invite link so the Mini App can navigate
-                            // the user directly into the group (works even if approval hasn't
-                            // propagated yet; avoids the "not a member" error with t.me/c/ links)
+                            // the user directly into the group.
                             let inviteLink = null;
                             try {
                                 const inviteRes = await fetch(
@@ -311,14 +303,15 @@ export default {
                                 console.warn(`createChatInviteLink error: ${e.message}`);
                             }
 
-                            // Update the verified record with the invite link so /check can return it
-                            if (inviteLink) {
-                                await stub.fetch('http://do/verified', {
-                                    method: 'PUT',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ verified: true, data: body, invite_link: inviteLink, timestamp: new Date().toISOString() })
-                                });
-                            }
+                            // Only write verified=true AFTER approval succeeds, in a single
+                            // write that includes the invite link. This prevents the frontend
+                            // from seeing verified=true before approval is confirmed, and
+                            // avoids a race window between two separate writes.
+                            await stub.fetch('http://do/verified', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ verified: true, data: body, invite_link: inviteLink, timestamp: new Date().toISOString() })
+                            });
 
                             // Send welcome message
                             await fetch(
@@ -379,8 +372,7 @@ export default {
                 return json({ verified: false, error: 'Invalid session' }, 400, request);
             }
 
-            const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
-            if (await isRateLimited(env, `check_${clientIp}`, 120, 120)) {
+            if (await isRateLimited(env, `check_${sessionId}`, 200, 120)) {
                 return json({ verified: false, error: 'Rate limited' }, 429, request);
             }
 
