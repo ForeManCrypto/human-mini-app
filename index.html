@@ -487,6 +487,7 @@
     var userId           = urlParams.get('user_id') || '';
     var messageId        = urlParams.get('message_id') || '';
     var trustedSessionId = null;
+    var inviteLink       = null;
     var pollCount        = 0;
     var maxPolls         = 60;
 
@@ -551,6 +552,7 @@
             var res  = await fetch(WORKER_URL + '/check?session=' + trustedSessionId);
             var json = await res.json();
             if (json.verified) {
+                if (json.invite_link) inviteLink = json.invite_link;
                 handleVerified(json.data || {});
                 return;
             } else {
@@ -568,12 +570,18 @@
     }
 
     function goToGroup() {
-        if (window.Telegram && window.Telegram.WebApp && chatId) {
-            var groupId = chatId.replace(/^-100/, '');
-            try {
-                window.Telegram.WebApp.openTelegramLink('https://t.me/c/' + groupId);
-            } catch(e) {
-                console.warn('Could not open group link:', e);
+        if (window.Telegram && window.Telegram.WebApp) {
+            var link = inviteLink;
+            if (!link && chatId) {
+                // Fallback: t.me/c/ deep link (requires user to already be a member)
+                link = 'https://t.me/c/' + chatId.replace(/^-100/, '') + '/1';
+            }
+            if (link) {
+                try {
+                    window.Telegram.WebApp.openTelegramLink(link);
+                } catch(e) {
+                    console.warn('Could not open group link:', e);
+                }
             }
         }
         setTimeout(function() {

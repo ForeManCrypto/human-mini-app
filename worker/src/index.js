@@ -57,7 +57,8 @@ export class SessionStore {
                 const verified = await this.state.storage.get('verified');
                 return new Response(JSON.stringify({
                     verified: !!verified,
-                    data: verified ? verified.data : null
+                    data: verified ? verified.data : null,
+                    invite_link: verified ? (verified.invite_link || null) : null
                 }));
             }
 
@@ -268,6 +269,43 @@ export default {
                         console.log(`Telegram approve result: ${JSON.stringify(tgJson)}`);
 
                         if (tgJson.ok) {
+                            // Generate a single-use invite link so the Mini App can navigate
+                            // the user directly into the group (works even if approval hasn't
+                            // propagated yet; avoids the "not a member" error with t.me/c/ links)
+                            let inviteLink = null;
+                            try {
+                                const inviteRes = await fetch(
+                                    `https://api.telegram.org/bot${env.BOT_TOKEN}/createChatInviteLink`,
+                                    {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            chat_id: parseInt(chat_id),
+                                            member_limit: 1,
+                                            expire_date: Math.floor(Date.now() / 1000) + 300
+                                        })
+                                    }
+                                );
+                                const inviteJson = await inviteRes.json();
+                                if (inviteJson.ok) {
+                                    inviteLink = inviteJson.result.invite_link;
+                                    console.log(`Invite link created for session ${sessionId}`);
+                                } else {
+                                    console.warn(`createChatInviteLink failed: ${JSON.stringify(inviteJson)}`);
+                                }
+                            } catch(e) {
+                                console.warn(`createChatInviteLink error: ${e.message}`);
+                            }
+
+                            // Update the verified record with the invite link so /check can return it
+                            if (inviteLink) {
+                                await stub.fetch('http://do/verified', {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ verified: true, data: body, invite_link: inviteLink, timestamp: new Date().toISOString() })
+                                });
+                            }
+
                             // Send welcome message
                             await fetch(
                                 `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`,
