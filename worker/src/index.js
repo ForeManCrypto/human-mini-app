@@ -212,6 +212,8 @@ export default {
         if (request.method === 'POST' && url.pathname === '/verified') {
             try {
                 const rawBody = await request.text();
+                const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
+                console.log(`/verified hit: ip=${clientIp} body_len=${rawBody.length} secret_present=${!!url.searchParams.get('secret')}`);
 
                 // C1 — verify ShareRing secret
                 const secret = url.searchParams.get('secret');
@@ -221,7 +223,6 @@ export default {
                     return json({ error: 'Unauthorized' }, 401, request);
                 }
 
-                const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
                 if (await isRateLimited(env, `verified_${clientIp}`, 20, 60)) {
                     return json({ error: 'Rate limited' }, 429, request);
                 }
