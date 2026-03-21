@@ -35,41 +35,16 @@ ABOUT_URL   = "https://sharering.network"
 # ── Messages ──────────────────────────────────────────────────────
 WELCOME_TEXT = (
     "👋 *Welcome!*\n\n"
-    "This is a *private channel* — Proof of Human is required to enter.\n\n"
-    "To verify your identity we use *ShareRing Me*, a biometric identity app. "
+    "This is a *private channel* — entry requires Proof of Human verification.\n\n"
+    "We use *ShareRing Me*, a biometric identity app. "
     "Your data stays on your device — nothing is stored by this bot.\n\n"
     "━━━━━━━━━━━━━━━\n"
-    "📱 *Before you start:*\n"
-    "1. Download the *ShareRing Me* app\n"
-    "2. Set up your digital identity and add your *Social Profile* in the vault _(e.g. Social Network → Telegram)_\n"
-    "3. Come back here and tap *Start Verification*\n"
-    "━━━━━━━━━━━━━━━\n\n"
-    "Tap a button below to get started 👇"
-)
-
-ABOUT_TEXT = (
-    "ℹ️ *About ShareRing*\n\n"
-    "ShareRing is a blockchain-based digital identity platform. "
-    "It lets you prove who you are — without revealing your personal data.\n\n"
-    "*How it works:*\n"
-    "• Your ID documents are verified once and stored encrypted on your device\n"
-    "• You share only what's needed — nothing more\n"
-    "• Zero data is sent to or stored by this bot\n\n"
-    "*Why Proof of Human?*\n"
-    "To keep this community genuine and bot-free. "
-    "Every member has passed biometric verification.\n\n"
-    "[Learn more →](https://sharering.network)"
-)
-
-INSTRUCTIONS_TEXT = (
-    "📋 *Before you scan the QR code:*\n\n"
-    "1️⃣ Make sure you have the *ShareRing Me* app installed\n"
-    "2️⃣ Open the app, complete your identity setup and add your *Social Profile* to the vault _(e.g. Social Network → Telegram)_\n"
-    "3️⃣ Have your phone ready to scan\n\n"
-    "When you tap *Verify Now*, a QR code will appear. "
-    "Open ShareRing Me, tap the scan icon, and scan it. "
-    "Then approve the request in the app.\n\n"
-    "The whole process takes about *30 seconds*. ✅"
+    "📱 *Need the app?* Download ShareRing Me, then:\n"
+    "• Complete your identity setup\n"
+    "• Add your *Social Profile* to the vault _(Social Network → Telegram)_\n\n"
+    "Once ready, tap *Verify Now* below. "
+    "Scan the QR code in the app and tap *Approve*. Takes about 30 seconds. ✅\n"
+    "━━━━━━━━━━━━━━━"
 )
 
 # ── Database (M2 — module-level connection with WAL mode) ─────────
@@ -78,9 +53,6 @@ _db.execute("PRAGMA journal_mode=WAL")
 _db.execute("PRAGMA busy_timeout=5000")
 _db.execute('''CREATE TABLE IF NOT EXISTS groups
                (chat_id INTEGER PRIMARY KEY, activated INTEGER)''')
-_db.execute('''CREATE TABLE IF NOT EXISTS seen_users
-               (user_id INTEGER, chat_id INTEGER,
-                PRIMARY KEY (user_id, chat_id))''')
 _db.commit()
 
 def is_activated(chat_id):
@@ -93,19 +65,6 @@ def is_activated(chat_id):
 
 def activate_group(chat_id):
     _db.execute("INSERT OR REPLACE INTO groups VALUES (?,1)", (chat_id,))
-    _db.commit()
-
-def has_seen_welcome(user_id, chat_id):
-    row = _db.execute(
-        "SELECT 1 FROM seen_users WHERE user_id=? AND chat_id=?",
-        (user_id, chat_id)
-    ).fetchone()
-    return bool(row)
-
-def mark_seen(user_id, chat_id):
-    _db.execute(
-        "INSERT OR IGNORE INTO seen_users VALUES (?,?)", (user_id, chat_id)
-    )
     _db.commit()
 
 # ── Worker session registration (C2 fix) ─────────────────────────
@@ -150,45 +109,20 @@ def mini_app_url(chat_id, user_id, message_id=None):
         url += f"&message_id={message_id}"
     return url
 
-# ── Keyboards ─────────────────────────────────────────────────────
-def welcome_keyboard(chat_id, user_id):
+# ── Keyboard ──────────────────────────────────────────────────────
+def main_keyboard(chat_id, user_id, message_id=None):
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("ℹ️ About Us",     callback_data=f"about|{chat_id}|{user_id}"),
-            InlineKeyboardButton("📱 Download App", callback_data=f"download|{chat_id}|{user_id}"),
+            InlineKeyboardButton("🍎 App Store",  url=IOS_URL),
+            InlineKeyboardButton("🤖 Play Store", url=ANDROID_URL),
         ],
+        [InlineKeyboardButton("🌐 About ShareRing", url=ABOUT_URL)],
         [
             InlineKeyboardButton(
-                "✅ Start Verification →",
-                callback_data=f"instructions|{chat_id}|{user_id}"
-            )
-        ]
-    ])
-
-def download_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🍎 App Store (iOS)",      url=IOS_URL),
-            InlineKeyboardButton("🤖 Play Store (Android)", url=ANDROID_URL),
-        ],
-        [InlineKeyboardButton("← Back", callback_data="back_to_welcome")]
-    ])
-
-def instructions_keyboard(chat_id, user_id, message_id=None):
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "🔍 Verify Now",
+                "✅ Verify Now →",
                 web_app=WebAppInfo(url=mini_app_url(chat_id, user_id, message_id))
             )
-        ],
-        [InlineKeyboardButton("← Back", callback_data=f"back|{chat_id}|{user_id}")]
-    ])
-
-def about_keyboard(chat_id, user_id):
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌐 sharering.network", url=ABOUT_URL)],
-        [InlineKeyboardButton("← Back", callback_data=f"back|{chat_id}|{user_id}")]
+        ]
     ])
 
 # ── Handlers ──────────────────────────────────────────────────────
@@ -250,66 +184,24 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if not has_seen_welcome(user_id, chat_id):
-        mark_seen(user_id, chat_id)
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=WELCOME_TEXT,
-            parse_mode="Markdown",
-            reply_markup=welcome_keyboard(chat_id, user_id)
-        )
-    else:
-        sent = await context.bot.send_message(
-            chat_id=user_id,
-            text=INSTRUCTIONS_TEXT,
-            parse_mode="Markdown",
-            reply_markup=instructions_keyboard(chat_id, user_id)
-        )
-        await context.bot.edit_message_reply_markup(
-            chat_id=user_id,
-            message_id=sent.message_id,
-            reply_markup=instructions_keyboard(chat_id, user_id, sent.message_id)
-        )
+    # Send single-screen welcome, then edit to inject message_id into the WebApp URL
+    # so the worker can clean up this message after verification.
+    sent = await context.bot.send_message(
+        chat_id=user_id,
+        text=WELCOME_TEXT,
+        parse_mode="Markdown",
+        reply_markup=main_keyboard(chat_id, user_id)
+    )
+    await context.bot.edit_message_reply_markup(
+        chat_id=user_id,
+        message_id=sent.message_id,
+        reply_markup=main_keyboard(chat_id, user_id, sent.message_id)
+    )
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data  = query.data
-    parts = data.split("|")
-
-    if data.startswith("about|"):
-        chat_id, user_id = parts[1], parts[2]
-        await query.edit_message_text(
-            ABOUT_TEXT,
-            parse_mode="Markdown",
-            reply_markup=about_keyboard(chat_id, user_id)
-        )
-
-    elif data.startswith("download|"):
-        await query.edit_message_text(
-            "📱 *Download ShareRing Me*\n\n"
-            "Choose your platform below. Once installed, set up your "
-            "digital identity — then come back and tap *Start Verification*.",
-            parse_mode="Markdown",
-            reply_markup=download_keyboard()
-        )
-
-    elif data.startswith("instructions|"):
-        chat_id, user_id = parts[1], parts[2]
-        message_id = query.message.message_id
-        await query.edit_message_text(
-            INSTRUCTIONS_TEXT,
-            parse_mode="Markdown",
-            reply_markup=instructions_keyboard(chat_id, user_id, message_id)
-        )
-
-    elif data.startswith("back|"):
-        chat_id, user_id = parts[1], parts[2]
-        await query.edit_message_text(
-            WELCOME_TEXT,
-            parse_mode="Markdown",
-            reply_markup=welcome_keyboard(chat_id, user_id)
-        )
+    # No navigation callbacks in the current flow — just dismiss the spinner
+    # for any lingering buttons from before this deploy.
+    await update.callback_query.answer()
 
 async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Fallback — Worker approves directly but this catches sendData as safety net."""
