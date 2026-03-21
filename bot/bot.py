@@ -334,12 +334,17 @@ def main():
     logger.info(f"Starting webhook on {domain}")
 
     # C4 — webhook secret to prevent fake Telegram update injection
+    # allowed_updates must include chat_member explicitly — Telegram omits it by default.
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         url_path="/webhook",
         webhook_url=f"https://{domain}/webhook",
-        secret_token=WEBHOOK_SECRET
+        secret_token=WEBHOOK_SECRET,
+        allowed_updates=[
+            "message", "callback_query", "chat_join_request",
+            "chat_member", "pre_checkout_query",
+        ],
     )
 
 if __name__ == "__main__":
