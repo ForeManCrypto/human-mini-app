@@ -178,12 +178,13 @@ export default {
         if (request.method === 'POST' && url.pathname === '/session') {
             try {
                 const body = await request.json();
-                const { session_id, user_id, chat_id, message_id } = body;
+                const { session_id, user_id, chat_id, message_id, action_type } = body;
 
                 if (!isValidSessionId(session_id)) return json({ error: 'Invalid session_id' }, 400, request);
                 if (!isValidUserId(user_id))       return json({ error: 'Invalid user_id' }, 400, request);
                 if (!isValidChatId(chat_id))       return json({ error: 'Invalid chat_id' }, 400, request);
                 if (message_id && !isValidMessageId(message_id)) return json({ error: 'Invalid message_id' }, 400, request);
+                if (action_type && action_type !== 'unrestrict') return json({ error: 'Invalid action_type' }, 400, request);
 
                 if (await isRateLimited(env, `session_${user_id}`, 20, 60)) {
                     return json({ error: 'Rate limited' }, 429, request);
@@ -191,6 +192,7 @@ export default {
 
                 const meta = { user_id: String(user_id), chat_id: String(chat_id) };
                 if (message_id) meta.message_id = String(message_id);
+                if (action_type === 'unrestrict') meta.action_type = 'unrestrict';
 
                 const stub = getSession(env, session_id);
                 await stub.fetch('http://do/meta', {
@@ -271,57 +273,94 @@ export default {
                     const { user_id, chat_id } = meta;
 
                     if (user_id && chat_id && env.BOT_TOKEN) {
-                        // Approve the Telegram join request.
-                        // USER_ALREADY_PARTICIPANT is not an error.
-                        const tgRes = await fetch(
-                            `https://api.telegram.org/bot${env.BOT_TOKEN}/approveChatJoinRequest`,
-                            {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    chat_id: parseInt(chat_id),
-                                    user_id: parseInt(user_id)
-                                })
-                            }
-                        );
-                        const tgJson = await tgRes.json();
-                        console.log(`Telegram approve result: ${JSON.stringify(tgJson)}`);
-
-                        const approvalOk = tgJson.ok ||
-                            (tgJson.error_code === 400 && tgJson.description && tgJson.description.includes('USER_ALREADY_PARTICIPANT'));
-
-                        if (!tgJson.ok && !approvalOk) {
-                            console.error(`Telegram approval failed: ${JSON.stringify(tgJson)}`);
-                            await alertAdmin(env, `❌ Telegram approval failed for user \`${user_id}\` in chat \`${chat_id}\`\n\`${JSON.stringify(tgJson)}\``);
-                        }
-
-                        // Generate invite link and update the verified record.
                         let inviteLink = null;
-                        try {
-                            const inviteRes = await fetch(
-                                `https://api.telegram.org/bot${env.BOT_TOKEN}/createChatInviteLink`,
+
+                        if (meta.action_type === 'unrestrict') {
+                            // Lift restrictions — user is already in the group, just muted pending verification.
+                            const tgRes = await fetch(
+                                `https://api.telegram.org/bot${env.BOT_TOKEN}/restrictChatMember`,
                                 {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
                                         chat_id: parseInt(chat_id),
-                                        member_limit: 1,
-                                        expire_date: Math.floor(Date.now() / 1000) + 300
+                                        user_id: parseInt(user_id),
+                                        permissions: {
+                                            can_send_messages: true,
+                                            can_send_audios: true,
+                                            can_send_documents: true,
+                                            can_send_photos: true,
+                                            can_send_videos: true,
+                                            can_send_video_notes: true,
+                                            can_send_voice_notes: true,
+                                            can_send_polls: true,
+                                            can_send_other_messages: true,
+                                            can_add_web_page_previews: true,
+                                            can_change_info: false,
+                                            can_invite_users: true,
+                                            can_pin_messages: false,
+                                        }
                                     })
                                 }
                             );
-                            const inviteJson = await inviteRes.json();
-                            if (inviteJson.ok) {
-                                inviteLink = inviteJson.result.invite_link;
-                                console.log(`Invite link created for session ${sessionId}`);
-                            } else {
-                                console.warn(`createChatInviteLink failed: ${JSON.stringify(inviteJson)}`);
+                            const tgJson = await tgRes.json();
+                            console.log(`Telegram unrestrict result: ${JSON.stringify(tgJson)}`);
+                            if (!tgJson.ok) {
+                                console.error(`Telegram unrestrict failed: ${JSON.stringify(tgJson)}`);
+                                await alertAdmin(env, `❌ Telegram unrestrict failed for user \`${user_id}\` in chat \`${chat_id}\`\n\`${JSON.stringify(tgJson)}\``);
                             }
-                        } catch(e) {
-                            console.warn(`createChatInviteLink error: ${e.message}`);
+                        } else {
+                            // Approve the Telegram join request.
+                            // USER_ALREADY_PARTICIPANT is not an error.
+                            const tgRes = await fetch(
+                                `https://api.telegram.org/bot${env.BOT_TOKEN}/approveChatJoinRequest`,
+                                {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        chat_id: parseInt(chat_id),
+                                        user_id: parseInt(user_id)
+                                    })
+                                }
+                            );
+                            const tgJson = await tgRes.json();
+                            console.log(`Telegram approve result: ${JSON.stringify(tgJson)}`);
+
+                            const approvalOk = tgJson.ok ||
+                                (tgJson.error_code === 400 && tgJson.description && tgJson.description.includes('USER_ALREADY_PARTICIPANT'));
+
+                            if (!tgJson.ok && !approvalOk) {
+                                console.error(`Telegram approval failed: ${JSON.stringify(tgJson)}`);
+                                await alertAdmin(env, `❌ Telegram approval failed for user \`${user_id}\` in chat \`${chat_id}\`\n\`${JSON.stringify(tgJson)}\``);
+                            }
+
+                            // Generate invite link for join-request flow.
+                            try {
+                                const inviteRes = await fetch(
+                                    `https://api.telegram.org/bot${env.BOT_TOKEN}/createChatInviteLink`,
+                                    {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            chat_id: parseInt(chat_id),
+                                            member_limit: 1,
+                                            expire_date: Math.floor(Date.now() / 1000) + 300
+                                        })
+                                    }
+                                );
+                                const inviteJson = await inviteRes.json();
+                                if (inviteJson.ok) {
+                                    inviteLink = inviteJson.result.invite_link;
+                                    console.log(`Invite link created for session ${sessionId}`);
+                                } else {
+                                    console.warn(`createChatInviteLink failed: ${JSON.stringify(inviteJson)}`);
+                                }
+                            } catch(e) {
+                                console.warn(`createChatInviteLink error: ${e.message}`);
+                            }
                         }
 
-                        // Update verified record with invite link now that it's available.
+                        // Update verified record with invite link (null for unrestrict flow).
                         await stub.fetch('http://do/verified', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
@@ -329,6 +368,9 @@ export default {
                         });
 
                         // Send welcome message
+                        const welcomeText = meta.action_type === 'unrestrict'
+                            ? '✅ *Human verified. You can now send messages in the group!*'
+                            : '✅ *Human verified. Welcome!*';
                         await fetch(
                             `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`,
                             {
@@ -336,7 +378,7 @@ export default {
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     chat_id: parseInt(user_id),
-                                    text: '✅ *Human verified. Welcome!*',
+                                    text: welcomeText,
                                     parse_mode: 'Markdown'
                                 })
                             }
@@ -344,6 +386,9 @@ export default {
 
                         // Clean up the verify button message
                         if (meta.message_id) {
+                            const editText = meta.action_type === 'unrestrict'
+                                ? '✅ *Identity verified — you can now send messages!*\n\nYou can close this chat.'
+                                : '✅ *Identity verified — you\'ve been approved!*\n\nYou can now close this chat and join the group.';
                             await fetch(
                                 `https://api.telegram.org/bot${env.BOT_TOKEN}/editMessageText`,
                                 {
@@ -352,7 +397,7 @@ export default {
                                     body: JSON.stringify({
                                         chat_id: parseInt(user_id),
                                         message_id: parseInt(meta.message_id),
-                                        text: '✅ *Identity verified — you\'ve been approved!*\n\nYou can now close this chat and join the group.',
+                                        text: editText,
                                         parse_mode: 'Markdown',
                                         reply_markup: { inline_keyboard: [] }
                                     })
@@ -361,9 +406,9 @@ export default {
                             console.log(`Cleaned up verify message ${meta.message_id} for user ${user_id}`);
                         }
 
-                        // H2 — delete meta to prevent re-approval, keep verified for frontend to poll
+                        // H2 — delete meta to prevent re-use, keep verified for frontend to poll
                         await stub.fetch('http://do/meta', { method: 'DELETE' });
-                        console.log(`Session ${sessionId} approved and meta cleared`);
+                        console.log(`Session ${sessionId} ${meta.action_type === 'unrestrict' ? 'unrestricted' : 'approved'} and meta cleared`);
                     }
                 }
 

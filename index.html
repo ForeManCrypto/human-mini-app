@@ -434,7 +434,7 @@
             <div class="verified-ring">✅</div>
             <div class="verified-title">Identity Verified</div>
             <div class="verified-profile" id="verifiedProfile" style="display:none"></div>
-            <div class="verified-sub">Your join request has been approved.<br>You'll be redirected shortly, or tap below.</div>
+            <div class="verified-sub" id="verifiedSub">Your join request has been approved.<br>You'll be redirected shortly, or tap below.</div>
             <button class="join-btn" id="joinBtn" onclick="goToGroup()">Join Group →</button>
         </div>
 
@@ -486,6 +486,7 @@
     var chatId        = urlParams.get('chat_id') || '';
     var userId        = urlParams.get('user_id') || '';
     var messageId     = urlParams.get('message_id') || '';
+    var actionType    = urlParams.get('action_type') || '';
     // Keep a rolling list of recent session IDs (most recent first, max 5).
     // When the SDK rotates the QR after a scan, onInit fires with a NEW session
     // while ShareRing will still call /verified with the SCANNED session.
@@ -516,7 +517,8 @@
                 session_id: id,
                 user_id: userId,
                 chat_id: chatId,
-                message_id: messageId || undefined
+                message_id: messageId || undefined,
+                action_type: actionType || undefined
             })
         }).catch(function(e) { console.warn('Session register error:', e); });
     }
@@ -621,6 +623,11 @@
         }
 
         setStatus('✅ Identity verified — welcome!', 'success');
+
+        if (actionType === 'unrestrict') {
+            document.getElementById('verifiedSub').innerHTML = 'You can now send messages in the group.<br>You\'ll be redirected shortly.';
+            document.getElementById('joinBtn').textContent = 'Go to Group →';
+        }
 
         // Show join button immediately as fallback
         document.getElementById('joinBtn').classList.add('show');

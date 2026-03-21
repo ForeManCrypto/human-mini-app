@@ -1,10 +1,10 @@
 import logging, json, sqlite3, os, hashlib, urllib.request
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
-    WebAppInfo, LabeledPrice
+    WebAppInfo, LabeledPrice, ChatMember, ChatPermissions
 )
 from telegram.ext import (
-    Application, CommandHandler, ChatJoinRequestHandler,
+    Application, CommandHandler, ChatJoinRequestHandler, ChatMemberHandler,
     MessageHandler, CallbackQueryHandler, filters,
     ContextTypes, PreCheckoutQueryHandler
 )
@@ -32,10 +32,37 @@ IOS_URL     = "https://apps.apple.com/us/app/sharering-me/id6476899324"
 ANDROID_URL = "https://play.google.com/store/apps/details?id=network.sharering.me"
 ABOUT_URL   = "https://sharering.network"
 
+# ── Permissions ───────────────────────────────────────────────────
+NO_SEND_PERMISSIONS = ChatPermissions(
+    can_send_messages=False,
+    can_send_audios=False,
+    can_send_documents=False,
+    can_send_photos=False,
+    can_send_videos=False,
+    can_send_video_notes=False,
+    can_send_voice_notes=False,
+    can_send_polls=False,
+    can_send_other_messages=False,
+)
+
 # ── Messages ──────────────────────────────────────────────────────
 WELCOME_TEXT = (
     "👋 *Welcome!*\n\n"
     "This is a *private channel* — entry requires Proof of Human verification.\n\n"
+    "We use *ShareRing Me*, a biometric identity app. "
+    "Your data stays on your device — nothing is stored by this bot.\n\n"
+    "━━━━━━━━━━━━━━━\n"
+    "📱 *Need the app?* Download ShareRing Me, then:\n"
+    "• Complete your identity setup\n"
+    "• Add your *Social Profile* to the vault _(Social Network → Telegram)_\n\n"
+    "Once ready, tap *Verify Now* below. "
+    "Scan the QR code in the app and tap *Approve*. Takes about 30 seconds. ✅\n"
+    "━━━━━━━━━━━━━━━"
+)
+
+RESTRICTED_TEXT = (
+    "👋 *Welcome to the group!*\n\n"
+    "To participate, you need to complete a quick *Proof of Human* verification.\n\n"
     "We use *ShareRing Me*, a biometric identity app. "
     "Your data stays on your device — nothing is stored by this bot.\n\n"
     "━━━━━━━━━━━━━━━\n"
@@ -103,14 +130,16 @@ def register_session(session_id: str, user_id: int, chat_id: int):
     except Exception as e:
         logger.warning(f"Session pre-registration failed: {e}")
 
-def mini_app_url(chat_id, user_id, message_id=None):
+def mini_app_url(chat_id, user_id, message_id=None, action_type=None):
     url = f"{MINI_APP_URL}/?chat_id={chat_id}&user_id={user_id}"
     if message_id:
         url += f"&message_id={message_id}"
+    if action_type:
+        url += f"&action_type={action_type}"
     return url
 
 # ── Keyboard ──────────────────────────────────────────────────────
-def main_keyboard(chat_id, user_id, message_id=None):
+def main_keyboard(chat_id, user_id, message_id=None, action_type=None):
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🍎 App Store",  url=IOS_URL),
@@ -120,7 +149,7 @@ def main_keyboard(chat_id, user_id, message_id=None):
         [
             InlineKeyboardButton(
                 "✅ Verify Now →",
-                web_app=WebAppInfo(url=mini_app_url(chat_id, user_id, message_id))
+                web_app=WebAppInfo(url=mini_app_url(chat_id, user_id, message_id, action_type))
             )
         ]
     ])
@@ -198,6 +227,57 @@ async def on_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_keyboard(chat_id, user_id, sent.message_id)
     )
 
+async def on_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    member_update = update.chat_member
+    if not member_update:
+        return
+
+    old_status = member_update.old_chat_member.status
+    new_status = member_update.new_chat_member.status
+
+    # Only handle fresh joins into "member" status
+    if new_status != ChatMember.MEMBER:
+        return
+    # Skip re-joins from existing/restricted states (avoids loop when we lift restrictions)
+    if old_status in (ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER, ChatMember.RESTRICTED):
+        return
+
+    user    = member_update.new_chat_member.user
+    chat_id = member_update.chat.id
+
+    if user.is_bot:
+        return
+    if not is_activated(chat_id):
+        return
+
+    logger.info(f"NEW MEMBER user {user.id} joined chat {chat_id} — restricting pending verification")
+
+    try:
+        await context.bot.restrict_chat_member(
+            chat_id=chat_id,
+            user_id=user.id,
+            permissions=NO_SEND_PERMISSIONS,
+        )
+    except Exception as e:
+        logger.warning(f"Could not restrict user {user.id} in {chat_id}: {e}")
+        return  # Bot lacks admin rights — skip the DM too
+
+    try:
+        sent = await context.bot.send_message(
+            chat_id=user.id,
+            text=RESTRICTED_TEXT,
+            parse_mode="Markdown",
+            reply_markup=main_keyboard(chat_id, user.id, action_type="unrestrict"),
+        )
+        await context.bot.edit_message_reply_markup(
+            chat_id=user.id,
+            message_id=sent.message_id,
+            reply_markup=main_keyboard(chat_id, user.id, sent.message_id, action_type="unrestrict"),
+        )
+    except Exception as e:
+        logger.warning(f"Could not DM user {user.id}: {e}")
+
+
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # No navigation callbacks in the current flow — just dismiss the spinner
     # for any lingering buttons from before this deploy.
@@ -240,6 +320,7 @@ def main():
         filters.ChatType.GROUP | filters.ChatType.SUPERGROUP
     ))
     app.add_handler(ChatJoinRequestHandler(on_join_request))
+    app.add_handler(ChatMemberHandler(on_new_member, ChatMemberHandler.CHAT_MEMBER))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(MessageHandler(
         filters.StatusUpdate.WEB_APP_DATA, on_web_app_data
