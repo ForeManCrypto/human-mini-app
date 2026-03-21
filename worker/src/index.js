@@ -236,6 +236,16 @@ export default {
 
                 const stub = getSession(env, sessionId);
 
+                // Write verified=true immediately so the frontend can pick it up
+                // regardless of what happens next (meta lookup, Telegram approval).
+                // We update it with the invite link once that's generated.
+                await stub.fetch('http://do/verified', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ verified: true, data: body, timestamp: new Date().toISOString() })
+                });
+                console.log(`Verified=true written for session ${sessionId}`);
+
                 // Look up meta registered by the frontend.
                 // Retry up to 3x with 1s delay — handles the race where ShareRing
                 // calls /verified before the frontend's POST /session completes.
@@ -261,8 +271,7 @@ export default {
 
                     if (user_id && chat_id && env.BOT_TOKEN) {
                         // Approve the Telegram join request.
-                        // This may return ok:false if the user is already a member —
-                        // that's fine, we still record verification and generate an invite.
+                        // USER_ALREADY_PARTICIPANT is not an error.
                         const tgRes = await fetch(
                             `https://api.telegram.org/bot${env.BOT_TOKEN}/approveChatJoinRequest`,
                             {
@@ -277,7 +286,6 @@ export default {
                         const tgJson = await tgRes.json();
                         console.log(`Telegram approve result: ${JSON.stringify(tgJson)}`);
 
-                        // USER_ALREADY_PARTICIPANT means they're already in the group — not a real error.
                         const approvalOk = tgJson.ok ||
                             (tgJson.error_code === 400 && tgJson.description && tgJson.description.includes('USER_ALREADY_PARTICIPANT'));
 
@@ -286,8 +294,7 @@ export default {
                             await alertAdmin(env, `❌ Telegram approval failed for user \`${user_id}\` in chat \`${chat_id}\`\n\`${JSON.stringify(tgJson)}\``);
                         }
 
-                        // Generate a single-use invite link so the Mini App can navigate
-                        // the user directly into the group.
+                        // Generate invite link and update the verified record.
                         let inviteLink = null;
                         try {
                             const inviteRes = await fetch(
@@ -313,8 +320,7 @@ export default {
                             console.warn(`createChatInviteLink error: ${e.message}`);
                         }
 
-                        // Write verified=true unconditionally — ShareRing verified the identity.
-                        // Telegram approval success/failure is a side effect, not the source of truth.
+                        // Update verified record with invite link now that it's available.
                         await stub.fetch('http://do/verified', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
