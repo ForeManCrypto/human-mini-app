@@ -178,13 +178,14 @@ export default {
         if (request.method === 'POST' && url.pathname === '/session') {
             try {
                 const body = await request.json();
-                const { session_id, user_id, chat_id, message_id, action_type } = body;
+                const { session_id, user_id, chat_id, message_id, action_type, group_message_id } = body;
 
                 if (!isValidSessionId(session_id)) return json({ error: 'Invalid session_id' }, 400, request);
                 if (!isValidUserId(user_id))       return json({ error: 'Invalid user_id' }, 400, request);
                 if (!isValidChatId(chat_id))       return json({ error: 'Invalid chat_id' }, 400, request);
                 if (message_id && !isValidMessageId(message_id)) return json({ error: 'Invalid message_id' }, 400, request);
                 if (action_type && action_type !== 'unrestrict') return json({ error: 'Invalid action_type' }, 400, request);
+                if (group_message_id && !isValidMessageId(group_message_id)) return json({ error: 'Invalid group_message_id' }, 400, request);
 
                 if (await isRateLimited(env, `session_${user_id}`, 20, 60)) {
                     return json({ error: 'Rate limited' }, 429, request);
@@ -193,6 +194,7 @@ export default {
                 const meta = { user_id: String(user_id), chat_id: String(chat_id) };
                 if (message_id) meta.message_id = String(message_id);
                 if (action_type === 'unrestrict') meta.action_type = 'unrestrict';
+                if (group_message_id) meta.group_message_id = String(group_message_id);
 
                 const stub = getSession(env, session_id);
                 await stub.fetch('http://do/meta', {
@@ -367,24 +369,7 @@ export default {
                             body: JSON.stringify({ verified: true, data: body, invite_link: inviteLink, timestamp: new Date().toISOString() })
                         });
 
-                        // Send welcome message
-                        const welcomeText = meta.action_type === 'unrestrict'
-                            ? '✅ *Human verified. You can now send messages in the group!*'
-                            : '✅ *Human verified. Welcome!*';
-                        await fetch(
-                            `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`,
-                            {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    chat_id: parseInt(user_id),
-                                    text: welcomeText,
-                                    parse_mode: 'Markdown'
-                                })
-                            }
-                        );
-
-                        // Clean up the verify button message
+                        // Edit the verify button message to show success (replaces the Verify Now button).
                         if (meta.message_id) {
                             const editText = meta.action_type === 'unrestrict'
                                 ? '✅ *Identity verified — you can now send messages!*\n\nYou can close this chat.'
@@ -404,6 +389,22 @@ export default {
                                 }
                             );
                             console.log(`Cleaned up verify message ${meta.message_id} for user ${user_id}`);
+                        }
+
+                        // Delete the group fallback message (if user couldn't be DM'd initially).
+                        if (meta.group_message_id) {
+                            await fetch(
+                                `https://api.telegram.org/bot${env.BOT_TOKEN}/deleteMessage`,
+                                {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        chat_id: parseInt(chat_id),
+                                        message_id: parseInt(meta.group_message_id)
+                                    })
+                                }
+                            ).catch(e => console.warn(`deleteMessage (group fallback) error: ${e.message}`));
+                            console.log(`Deleted group fallback message ${meta.group_message_id} in chat ${chat_id}`);
                         }
 
                         // H2 — delete meta to prevent re-use, keep verified for frontend to poll

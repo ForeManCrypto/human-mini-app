@@ -130,16 +130,18 @@ def register_session(session_id: str, user_id: int, chat_id: int):
     except Exception as e:
         logger.warning(f"Session pre-registration failed: {e}")
 
-def mini_app_url(chat_id, user_id, message_id=None, action_type=None):
+def mini_app_url(chat_id, user_id, message_id=None, action_type=None, group_message_id=None):
     url = f"{MINI_APP_URL}/?chat_id={chat_id}&user_id={user_id}"
     if message_id:
         url += f"&message_id={message_id}"
     if action_type:
         url += f"&action_type={action_type}"
+    if group_message_id:
+        url += f"&group_message_id={group_message_id}"
     return url
 
 # ── Keyboard ──────────────────────────────────────────────────────
-def main_keyboard(chat_id, user_id, message_id=None, action_type=None):
+def main_keyboard(chat_id, user_id, message_id=None, action_type=None, group_message_id=None):
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🍎 App Store",  url=IOS_URL),
@@ -149,17 +151,20 @@ def main_keyboard(chat_id, user_id, message_id=None, action_type=None):
         [
             InlineKeyboardButton(
                 "✅ Verify Now →",
-                web_app=WebAppInfo(url=mini_app_url(chat_id, user_id, message_id, action_type))
+                web_app=WebAppInfo(url=mini_app_url(chat_id, user_id, message_id, action_type, group_message_id))
             )
         ]
     ])
 
 # ── Handlers ──────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Deep-link from group fallback: /start verify_CHATID
+    # Deep-link from group fallback: /start verify_CHATID_GROUPMSGID
     if context.args and context.args[0].startswith('verify_'):
+        payload = context.args[0][7:]  # strip 'verify_'
+        parts = payload.rsplit('_', 1)  # split off group_msg_id from the right
         try:
-            chat_id = int(context.args[0][7:])
+            chat_id      = int(parts[0])
+            group_msg_id = int(parts[1]) if len(parts) > 1 else None
         except ValueError:
             pass
         else:
@@ -167,12 +172,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent = await update.message.reply_text(
                 RESTRICTED_TEXT,
                 parse_mode="Markdown",
-                reply_markup=main_keyboard(chat_id, user_id, action_type="unrestrict"),
+                reply_markup=main_keyboard(chat_id, user_id, action_type="unrestrict", group_message_id=group_msg_id),
             )
             await context.bot.edit_message_reply_markup(
                 chat_id=user_id,
                 message_id=sent.message_id,
-                reply_markup=main_keyboard(chat_id, user_id, sent.message_id, action_type="unrestrict"),
+                reply_markup=main_keyboard(chat_id, user_id, sent.message_id, action_type="unrestrict", group_message_id=group_msg_id),
             )
             return
 
@@ -298,14 +303,22 @@ async def on_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.warning(f"Could not DM user {user.id}: {e} — sending group fallback")
         try:
             bot_username = context.bot.username
-            await context.bot.send_message(
+            grp = await context.bot.send_message(
                 chat_id=chat_id,
                 text=f"👋 [{user.full_name}](tg://user?id={user.id}) — tap below to verify your identity and unlock messaging.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✅ Verify Now →", url=f"https://t.me/{bot_username}?start=verify_{chat_id}")
+                ]]),
+            )
+            # Edit to embed the group message_id so the worker can delete it after verification
+            await context.bot.edit_message_reply_markup(
+                chat_id=chat_id,
+                message_id=grp.message_id,
+                reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton(
                         "✅ Verify Now →",
-                        url=f"https://t.me/{bot_username}?start=verify_{chat_id}"
+                        url=f"https://t.me/{bot_username}?start=verify_{chat_id}_{grp.message_id}"
                     )
                 ]]),
             )

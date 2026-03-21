@@ -486,7 +486,8 @@
     var chatId        = urlParams.get('chat_id') || '';
     var userId        = urlParams.get('user_id') || '';
     var messageId     = urlParams.get('message_id') || '';
-    var actionType    = urlParams.get('action_type') || '';
+    var actionType      = urlParams.get('action_type') || '';
+    var groupMessageId  = urlParams.get('group_message_id') || '';
     // Keep a rolling list of recent session IDs (most recent first, max 5).
     // When the SDK rotates the QR after a scan, onInit fires with a NEW session
     // while ShareRing will still call /verified with the SCANNED session.
@@ -518,7 +519,8 @@
                 user_id: userId,
                 chat_id: chatId,
                 message_id: messageId || undefined,
-                action_type: actionType || undefined
+                action_type: actionType || undefined,
+                group_message_id: groupMessageId || undefined
             })
         }).catch(function(e) { console.warn('Session register error:', e); });
     }
@@ -625,19 +627,26 @@
         setStatus('✅ Identity verified — welcome!', 'success');
 
         if (actionType === 'unrestrict') {
-            document.getElementById('verifiedSub').innerHTML = 'You can now send messages in the group.<br>You\'ll be redirected shortly.';
-            document.getElementById('joinBtn').textContent = 'Go to Group →';
+            document.getElementById('verifiedSub').innerHTML = 'You can now send messages in the group.<br>Closing in a moment...';
+            document.getElementById('joinBtn').textContent = 'Close →';
+            document.getElementById('joinBtn').onclick = function() {
+                if (window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close();
+            };
         }
 
-        // Show join button immediately as fallback
+        // Show join/close button immediately as fallback
         document.getElementById('joinBtn').classList.add('show');
 
-        // Try auto-navigation after a short pause so the user sees the success screen
-        if (chatId && window.Telegram && window.Telegram.WebApp) {
-            setTimeout(function() {
-                goToGroup();
-            }, 3000);
-        }
+        // Auto-close (unrestrict) or auto-navigate to group (join request)
+        setTimeout(function() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                if (actionType === 'unrestrict') {
+                    window.Telegram.WebApp.close();
+                } else if (chatId) {
+                    goToGroup();
+                }
+            }
+        }, 3000);
     }
 
     setTimeout(function() {
