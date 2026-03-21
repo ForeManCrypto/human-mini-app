@@ -346,8 +346,12 @@ async def on_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"on_web_app_data error: {e}")
 
 # ── Main ──────────────────────────────────────────────────────────
+async def post_init(app):
+    info = await app.bot.get_webhook_info()
+    logger.info(f"Webhook: url={info.url} allowed_updates={info.allowed_updates} pending={info.pending_update_count}")
+
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler(
