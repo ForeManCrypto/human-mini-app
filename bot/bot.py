@@ -254,6 +254,9 @@ async def on_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     old_status = member_update.old_chat_member.status
     new_status = member_update.new_chat_member.status
+    user    = member_update.new_chat_member.user
+    chat_id = member_update.chat.id
+    logger.info(f"chat_member: user={user.id} chat={chat_id} {old_status}→{new_status} bot={user.is_bot}")
 
     # Only handle fresh joins into "member" status
     if new_status != ChatMember.MEMBER:
@@ -261,9 +264,6 @@ async def on_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Skip re-joins from existing/restricted states (avoids loop when we lift restrictions)
     if old_status in (ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER, ChatMember.RESTRICTED):
         return
-
-    user    = member_update.new_chat_member.user
-    chat_id = member_update.chat.id
 
     if user.is_bot:
         return
