@@ -252,21 +252,29 @@ export default {
                 console.log(`Verified=true written for session ${sessionId}`);
 
                 // Look up meta registered by the frontend.
-                // Retry up to 3x with 1s delay — handles the race where ShareRing
-                // calls /verified before the frontend's POST /session completes.
+                // Retry up to 6x with 2s delay (12s window) — handles the race where ShareRing
+                // calls /verified before the frontend's POST /session completes (e.g. slow mobile network).
                 let metaJson = { found: false };
-                for (let attempt = 1; attempt <= 3; attempt++) {
+                for (let attempt = 1; attempt <= 6; attempt++) {
                     const metaRes = await stub.fetch('http://do/meta');
                     metaJson = await metaRes.json();
                     if (metaJson.found) break;
-                    if (attempt < 3) {
-                        console.log(`Meta not found for ${sessionId} (attempt ${attempt}/3) — retrying in 1s`);
-                        await new Promise(r => setTimeout(r, 1000));
+                    if (attempt < 6) {
+                        console.log(`Meta not found for ${sessionId} (attempt ${attempt}/6) — retrying in 2s`);
+                        await new Promise(r => setTimeout(r, 2000));
                     }
                 }
 
                 if (!metaJson.found) {
-                    console.warn(`No meta found for session ${sessionId} after 3 attempts`);
+                    // Check if verified was already set — this means it's a duplicate ShareRing callback
+                    // (first call already processed and deleted meta). Safe to ignore.
+                    const checkRes = await stub.fetch('http://do/check');
+                    const checkJson = await checkRes.json();
+                    if (checkJson.verified) {
+                        console.log(`Duplicate /verified callback for ${sessionId} — already processed, ignoring.`);
+                        return json({ success: true }, 200, request);
+                    }
+                    console.warn(`No meta found for session ${sessionId} after 6 attempts`);
                     await alertAdmin(env, `🔍 No meta found for session \`${sessionId}\` after retries — possible race condition or unregistered session.`);
                 }
 
