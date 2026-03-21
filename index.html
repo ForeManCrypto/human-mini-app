@@ -495,7 +495,7 @@
     var pollSessions  = [];
     var inviteLink    = null;
     var pollCount     = 0;
-    var maxPolls      = 40;   // 40 × 0.5s = 20 seconds
+    var maxPolls      = 80;   // 80 × 0.25s = 20 seconds
 
     function setStatus(msg, type) {
         document.getElementById('status').className = type || '';
@@ -541,6 +541,10 @@
             addSession(sessionId);
             registerSession(sessionId);
         }
+        // Hide QR immediately — user has scanned, no need to show it anymore
+        document.getElementById('qrSection').classList.add('hidden');
+        document.getElementById('srLoading').style.display = 'flex';
+        document.getElementById('srLoading').innerHTML = '<div class="sr-spinner"></div><span>Waiting for approval in ShareRing Me...</span>';
         setStatus('QR scanned — open ShareRing Me and tap Approve ✓');
         pollCount = 0;
         doPoll();
@@ -573,7 +577,7 @@
         } catch(err) {
             console.warn('Poll error:', err.message);
         }
-        setTimeout(doPoll, 500);
+        setTimeout(doPoll, 250);
     }
 
     function retryVerification() {
