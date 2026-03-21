@@ -54,11 +54,15 @@ export class SessionStore {
             }
 
             case 'GET /check': {
-                const verified = await this.state.storage.get('verified');
+                const [verified, meta] = await Promise.all([
+                    this.state.storage.get('verified'),
+                    this.state.storage.get('meta')
+                ]);
                 return new Response(JSON.stringify({
                     verified: !!verified,
                     data: verified ? verified.data : null,
-                    invite_link: verified ? (verified.invite_link || null) : null
+                    invite_link: verified ? (verified.invite_link || null) : null,
+                    has_meta: !!meta
                 }));
             }
 
@@ -374,8 +378,19 @@ export default {
                 const stub = getSession(env, sessionId);
                 const res = await stub.fetch('http://do/check');
                 const data = await res.json();
-                return json({ verified: data.verified, data: data.data }, 200, request);
+
+                const sid = sessionId.substring(0, 8);
+                if (data.verified) {
+                    console.log(`[check] ${sid}… verified=true ✅`);
+                } else if (!data.has_meta) {
+                    console.warn(`[check] ${sid}… verified=false meta=MISSING — session never registered or already expired`);
+                } else {
+                    console.log(`[check] ${sid}… verified=false meta=ok — waiting for ShareRing callback`);
+                }
+
+                return json({ verified: data.verified, data: data.data, invite_link: data.invite_link || null }, 200, request);
             } catch(err) {
+                console.error(`[check] error for session ${sessionId.substring(0,8)}: ${err.message}`);
                 return json({ verified: false, error: 'Internal error' }, 500, request);
             }
         }
